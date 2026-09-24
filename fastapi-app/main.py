@@ -1,9 +1,14 @@
 # main.py
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Header
 import json
 from datetime import datetime
+import httpx
+
 
 app = FastAPI()
+
+B4H_BASE_URL = "https://192.168.90.200"
+
 
 @app.post("/webhook/alarm")
 async def receive_alarm(request: Request):
@@ -33,3 +38,28 @@ async def receive_alarm(request: Request):
             print(body[:500])
 
     return {"status": "ok"}
+
+@app.get("/media_video/cap")
+async def get_video_capability(
+    cookie: str | None = Header(default=None)
+):
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    if cookie:
+        headers["Cookie"] = cookie
+
+    async with httpx.AsyncClient(verify=False) as client:
+        response = await client.get(
+            f"{B4H_BASE_URL}/media_video/cap",
+            headers=headers
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=response.text
+        )
+
+    return response.json()
