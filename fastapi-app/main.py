@@ -1,94 +1,108 @@
-import hashlib
+import logging
+import mimetypes
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException, Response
-from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, Response
 
-BOX_URL = os.getenv("B4H_URL", "https://192.168.90.200")
-BOX_USER = os.getenv("B4H_USER", "admin")
-BOX_PASS = os.getenv("B4H_PASS", "Shohan@98")  # set this before running: B4H_PASS=yourpassword
+from b4h import B4HClient, B4HError
 
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"])
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("b4h")
 
-box = httpx.AsyncClient(base_url=BOX_URL, verify=False, timeout=15)  # box uses a self-signed certificate
-session_id: str | None = None
+box = B4HClient(
+    os.getenv("B4H_BASE_URL", "https://192.168.90.200"),
+    os.getenv("B4H_USER", "admin"),
+    os.getenv("B4H_PASS", ""),
+)
 
-
-# ---------- talking to the box ----------
-
-async def login():
-    """Same login the box web page does: get a challenge, send sha256(password + salt + challenge)."""
-    global session_id
-    r = (await box.get("/auth/login/challenge", params={"username": BOX_USER})).json()
-    d = r["data"]
-    pwd = hashlib.sha256((BOX_PASS + d["salt"] + d["challenge"]).encode()).hexdigest()
-    r = (await box.post("/auth/login", json={"session_id": d["session_id"], "username": BOX_USER, "password": pwd},
-                        headers={"Cookie": f"sessionID={d['session_id']}"})).json()
-    if r.get("code") != 0:
-        raise HTTPException(401, f"Box login failed: {r.get('message')}")
-    session_id = r.get("data", {}).get("session_id", d["session_id"])
+# Recognitions are stored on the box as alarms of this major type.
+RECOG_MAJOR = os.getenv("RECOG_MAJOR", "face_basic_business")
+BOX_MAX_PAGE_SIZE = 30  # the box refuses more than 30 records per request
+# Only minor types the box lists in GET /device_alarm/alarm_cap. An unknown one crashes the box's web server.
+RecognitionMinor = Literal["face_comparison_successful", "stranger"]
 
 
-async def call_box(method: str, path: str, body: dict | None = None):
-    """Call a box API. Logs in when needed and retries once if the session expired (code 512)."""
-    for attempt in range(2):
-        if session_id is None:
-            await login()
-        r = await box.request(method, path, json=body, headers={"Cookie": f"sessionID={session_id}"})
-        data = r.json()
-        if data.get("code") == 512 and attempt == 0:  # session expired -> log in again
-            await login()
-            continue
-        if data.get("code") != 0:
-            raise HTTPException(502, f"Box error {data.get('code')}: {data.get('message')}")
-        return data.get("data")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await box.login()
+        log.info("B4H login OK")
+    except Exception as e:
+        # Box offline/rebooting: start anyway, the first request logs in again.
+        log.warning("B4H login at startup failed (%r); will retry on first request", e)
+    yield
+    await box.close()
 
 
-# ---------- endpoints for the frontend ----------
+app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(B4HError)
+async def box_error(request: Request, exc: B4HError):
+    return JSONResponse(status_code=502, content={"detail": f"Box error on {exc.path}: {exc.message} (code {exc.code})"})
+
+
+@app.exception_handler(httpx.TransportError)
+async def box_unreachable(request: Request, exc: httpx.TransportError):
+    return JSONResponse(status_code=503, content={"detail": f"B4H box unreachable ({type(exc).__name__})"})
+
+
+def to_ms(value: str) -> int:
+    """'YYYY-MM-DD HH:mm:ss' in this PC's local time -> epoch milliseconds."""
+    try:
+        return int(datetime.strptime(value, "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
+    except ValueError:
+        raise HTTPException(422, f"Bad time '{value}', expected YYYY-MM-DD HH:mm:ss")
+
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
 
 @app.get("/api/recognition")
-async def recognition_records(
-    start: str | None = None,   # e.g. 2026-09-27 00:00:00   (default: today)
-    end: str | None = None,     # e.g. 2026-09-27 23:59:59
-    page: int = 1,
-    size: int = 10,             # box allows max 30
-    minor: str = "face_comparison_successful",
+async def recognition(
+    start: str,
+    end: str,
+    minor: RecognitionMinor = "face_comparison_successful",
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=BOX_MAX_PAGE_SIZE),
 ):
-    """Recognition Record list — same call the box page makes (device_alarm/alarm_history)."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    start_ms = int(datetime.strptime(start or f"{today} 00:00:00", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
-    end_ms = int(datetime.strptime(end or f"{today} 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp() * 1000)
-
-    body = {
+    """One page of recognition records, as the box returns them (the frontend maps the fields)."""
+    return await box.call("POST", "/device_alarm/alarm_history", {
         "offset": (page - 1) * size,
-        "size": min(size, 30),
+        "size": size,
         "query_condition": {
-            "start_time": str(start_ms),
-            "end_time": str(end_ms),
-            "alarm_type": [{"major_type": "face_basic_business", "minor_type": [minor]}],
+            "start_time": str(to_ms(start)),
+            "end_time": str(to_ms(end)),
+            "alarm_type": [{"major_type": RECOG_MAJOR, "minor_type": [minor]}],
         },
-    }
-    return await call_box("POST", "/device_alarm/alarm_history", body)
+    })
 
 
 @app.get("/api/devices")
 async def devices():
-    """Capture devices (cameras) — same call the box page makes (device_access/device_config)."""
-    return await call_box("POST", "/device_access/device_config", {"offset": 0, "size": 100})
+    """Cameras configured on the box, used for the device filter (id + name only: the raw config holds RTSP passwords)."""
+    data = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100})
+    return [{"device_id": d.get("device_id"), "device_name": d.get("device_name")} for d in data or []]
 
 
 @app.get("/api/image")
 async def image(uri: str):
-    """Face / panorama / base images from the records. The box needs the login cookie, so we fetch them here."""
-    if session_id is None:
-        await login()
-    cookie = {"Cookie": f"sessionID={session_id}"}
-    r = await box.get("/web/" + uri.lstrip("./"), headers=cookie)
-    if r.status_code != 200:
-        r = await box.get("/device_storage/get_image", params={"image_uri": uri}, headers=cookie)
-    if r.status_code != 200:
-        raise HTTPException(404, "Image not found")
-    return Response(r.content, media_type=r.headers.get("content-type", "image/jpeg"))
+    """Proxy a record image from the box (the browser can't send the box session cookie)."""
+    for path, params in (("/web/" + uri.lstrip("./"), None), ("/device_storage/get_image", {"image_uri": uri})):
+        try:
+            content, media_type = await box.get_bytes(path, params)
+            if media_type == "application/octet-stream":  # the box doesn't label its JPEGs
+                media_type = mimetypes.guess_type(uri)[0] or media_type
+            return Response(content, media_type=media_type, headers={"Cache-Control": "max-age=86400"})
+        except httpx.HTTPStatusError:
+            continue
+    raise HTTPException(404, "Image not found on the box")

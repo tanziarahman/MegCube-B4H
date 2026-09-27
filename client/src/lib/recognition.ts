@@ -4,6 +4,7 @@
 export interface RecognitionRow {
   id: string;
   time: string;            // "2026-09-27 11:53:20"
+  deviceId: string;
   device: string;
   living: string;
   name: string;
@@ -104,12 +105,30 @@ function formatTime(v: unknown): string {
 
 // ---------- mapping ----------
 
+/** Image path inside an `image_data` object: {image_data_format: 2, value: "./record_CHN0/...jpg"}. */
+function imagePath(v: unknown): string | undefined {
+  const d = v as Json | undefined;
+  return typeof d?.value === 'string' && d.value ? d.value : undefined;
+}
+
 function toRow(rec: unknown, index: number): RecognitionRow {
+  // Box layout: faces[0].image_data = face crop, faces[0].recognition_info[0].image_data = library photo,
+  // full_images[0].image_data = panorama.
+  const r = rec as Json;
+  const face0 = (r.faces as Json[] | undefined)?.[0];
+  const match0 = (face0?.recognition_info as Json[] | undefined)?.[0];
+  const full0 = (r.full_images as Json[] | undefined)?.[0];
+  const known = {
+    face: imagePath(face0?.image_data),
+    base: imagePath(match0?.image_data),
+    panorama: imagePath(full0?.image_data),
+  };
+
   const images = collectImages(rec);
   const byType = (words: string[]) => images.find((i) => words.some((w) => i.type.includes(w)))?.uri;
-  const face = byType(['face', 'crop', 'snap', 'target']);
-  const panorama = byType(['panor', 'background', 'scene', 'full', 'bg']);
-  const base = byType(['base', 'library', 'register', 'person', 'db']);
+  const face = known.face ?? byType(['face', 'crop', 'snap', 'target']);
+  const panorama = known.panorama ?? byType(['panor', 'background', 'scene', 'full', 'bg']);
+  const base = known.base ?? byType(['base', 'library', 'register', 'person', 'db']);
   const rest = images.map((i) => i.uri).filter((u) => u !== face && u !== panorama && u !== base);
 
   const groups = findAll(rec, ['group_name', 'group_names']).map(String);
@@ -118,11 +137,12 @@ function toRow(rec: unknown, index: number): RecognitionRow {
   return {
     id: String(find(rec, ['data_uuid', 'alarm_id', 'record_id', 'uuid', 'id']) ?? `${index}-${timeValue}`),
     time: formatTime(timeValue),
+    deviceId: String(find(rec, ['device_id', 'channel_id']) ?? ''),
     device: String(find(rec, ['device_name', 'channel_name', 'camera_name', 'source_name']) ?? '—'),
-    living: score(find(rec, ['living_score', 'liveness', 'live_score', 'living_fraction'])),
+    living: score(find(rec, ['liveness_score', 'living_score', 'liveness', 'live_score', 'living_fraction'])),
     name: String(find(rec, ['person_name', 'name']) ?? '—'),
     groups: groups.length ? Array.from(new Set(groups)).join(', ') : '—',
-    similarity: score(find(rec, ['similarity', 'score', 'compare_score', 'match_score'])),
+    similarity: score(find(rec, ['face_score', 'similarity', 'score', 'compare_score', 'match_score'])),
     // unlabelled images: assume order face, panorama, base
     faceImg: imageUrl(face ?? rest.shift()),
     panoramaImg: imageUrl(panorama ?? rest.shift()),

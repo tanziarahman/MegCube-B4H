@@ -7,7 +7,7 @@ import { fetchDevices, fetchRecognition, type Device, type RecognitionRow } from
 const PAGE_SIZE = 10;
 const RESULTS = [
   { label: 'Matched', minor: 'face_comparison_successful' },
-  { label: 'Stranger', minor: 'face_comparison_failed' }, // confirm name on the box if this returns nothing
+  { label: 'Stranger', minor: 'stranger' },
 ];
 
 // <input type="datetime-local"> value <-> backend format "YYYY-MM-DD HH:mm:ss"
@@ -77,8 +77,10 @@ export default function RecognitionTable() {
     setDeviceName('');
   };
 
+  // Records only carry a numeric device id; look its name up in the device list.
+  const deviceOf = (r: RecognitionRow) => devices.find((d) => d.id === r.deviceId)?.name ?? r.device;
   // The backend has no device filter yet, so filter the loaded page by device name.
-  const visible = deviceName ? rows.filter((r) => r.device === deviceName) : rows;
+  const visible = deviceName ? rows.filter((r) => deviceOf(r) === deviceName) : rows;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const inputCls = 'h-9 rounded-md border border-line bg-white px-2.5 text-[13px] outline-none focus:border-pri';
@@ -156,7 +158,7 @@ export default function RecognitionTable() {
                 <tr className="border-t border-line align-middle">
                   <td className="px-4 py-2.5"><Thumb src={r.faceImg} alt="Face" /></td>
                   <td className="px-4 py-2.5"><Thumb src={r.panoramaImg} alt="Panoramic" wide /></td>
-                  <td className="px-4 py-2.5">{r.device}</td>
+                  <td className="px-4 py-2.5">{deviceOf(r)}</td>
                   <td className="px-4 py-2.5 font-mono text-[12.5px]">{r.time}</td>
                   <td className="px-4 py-2.5 font-mono">{r.living}</td>
                   <td className="px-4 py-2.5"><Thumb src={r.baseImg} alt="Base image" /></td>
