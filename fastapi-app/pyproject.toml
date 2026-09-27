@@ -1,7 +1,18 @@
 [project]
-name = "fastapi-app"
+name = "b4h-portal-api"
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
-    "fastapi[standard]>=0.141.1",
+    "fastapi[standard]",
+    "httpx",
+    "python-dotenv",
+    "python-multipart",
+    "tzdata",
+    "uvicorn[standard]",
+    "websockets",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
 ]
