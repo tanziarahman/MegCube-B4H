@@ -6,6 +6,8 @@ Login flow:
   2. POST /auth/login  {session_id, username, password=sha256(pwd+salt+challenge)}
   3. Every request sends the header  Cookie: sessionID=<session_id>
 The box drops idle sessions after ~30 s (code 512); call() then logs in again and retries once.
+The box can't run two API queries at once on a session (it answers code 1073741825 "general"),
+so call() sends them one at a time.
 """
 import asyncio
 import hashlib
@@ -30,6 +32,7 @@ class B4HClient:
         self.session_id: str | None = None
         self._http = httpx.AsyncClient(base_url=base_url.rstrip("/"), verify=False, timeout=15)
         self._login_lock = asyncio.Lock()
+        self._call_lock = asyncio.Lock()
 
     async def login(self) -> None:
         async with self._login_lock:
@@ -55,8 +58,9 @@ class B4HClient:
         """Call a WebAPI endpoint. Returns `data` on code 0, raises B4HError otherwise."""
         if not self.session_id:
             await self.login()
-        r = await self._http.request(method, path, headers=self._headers(),
-                                     content=json.dumps(body) if body is not None else None)
+        async with self._call_lock:
+            r = await self._http.request(method, path, headers=self._headers(),
+                                         content=json.dumps(body) if body is not None else None)
         try:
             payload = r.json()
         except ValueError:
