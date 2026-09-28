@@ -167,7 +167,10 @@ export default function RecognitionTable() {
                   <td className="max-w-[180px] truncate px-4 py-2.5" title={r.groups}>{r.groups}</td>
                   <td className="px-4 py-2.5 font-mono">{r.similarity}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setSelected(r)} className="text-pri hover:underline">
+                    <button
+                      onClick={() => setSelected(r)}
+                      className="h-7 rounded-md border border-line bg-white px-3 text-[12px] font-medium hover:bg-ground"
+                    >
                       Details
                     </button>
                   </td>
