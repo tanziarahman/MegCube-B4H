@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from b4h import B4HError
 from core import box, log
-from routers import capture, common, personnel, recognition
+from routers import capture, comon, preview, personnel, recognition
 
 
 @asynccontextmanager
@@ -43,4 +43,3 @@ async def root():
 app.include_router(recognition.router)
 app.include_router(capture.router)
 app.include_router(common.router)
-app.include_router(personnel.router)

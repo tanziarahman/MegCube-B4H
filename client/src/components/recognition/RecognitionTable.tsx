@@ -1,8 +1,9 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { fetchDevices, fetchRecognition, type Device, type RecognitionRow } from '@/lib/recognition';
+import RecognitionDrawer from './RecognitionDrawer';
 
 const PAGE_SIZE = 10;
 const RESULTS = [
@@ -41,7 +42,8 @@ export default function RecognitionTable() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openRaw, setOpenRaw] = useState<string | null>(null);
+  const [selected, setSelected] = useState<RecognitionRow | null>(null);   // row shown in the details panel
+  const closeDetails = useCallback(() => setSelected(null), []);
 
   const load = useCallback(
     async (p: number) => {
@@ -154,8 +156,7 @@ export default function RecognitionTable() {
               <tr><td colSpan={10} className="px-4 py-10 text-center text-mute">No records for these filters.</td></tr>
             )}
             {!loading && !error && visible.map((r) => (
-              <Fragment key={r.id}>
-                <tr className="border-t border-line align-middle">
+                <tr key={r.id} className={`border-t border-line align-middle ${selected?.id === r.id ? 'bg-[#F2F6FF]' : ''}`}>
                   <td className="px-4 py-2.5"><Thumb src={r.faceImg} alt="Face" /></td>
                   <td className="px-4 py-2.5"><Thumb src={r.panoramaImg} alt="Panoramic" wide /></td>
                   <td className="px-4 py-2.5">{deviceOf(r)}</td>
@@ -166,21 +167,14 @@ export default function RecognitionTable() {
                   <td className="max-w-[180px] truncate px-4 py-2.5" title={r.groups}>{r.groups}</td>
                   <td className="px-4 py-2.5 font-mono">{r.similarity}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setOpenRaw(openRaw === r.id ? null : r.id)} className="text-pri hover:underline">
-                      {openRaw === r.id ? 'Hide' : 'Raw'}
+                    <button
+                      onClick={() => setSelected(r)}
+                      className="h-7 rounded-md border border-line bg-white px-3 text-[12px] font-medium hover:bg-ground"
+                    >
+                      Details
                     </button>
                   </td>
                 </tr>
-                {openRaw === r.id && (
-                  <tr className="bg-ground">
-                    <td colSpan={10} className="px-4 py-3">
-                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap font-mono text-[11.5px]">
-                        {JSON.stringify(r.raw, null, 2)}
-                      </pre>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
             ))}
           </tbody>
         </table>
@@ -199,6 +193,8 @@ export default function RecognitionTable() {
             className="h-8 rounded-md border border-line px-3 disabled:opacity-40">Next</button>
         </div>
       </div>
+
+      <RecognitionDrawer row={selected} deviceName={selected ? deviceOf(selected) : ''} onClose={closeDetails} />
     </div>
   );
 }
