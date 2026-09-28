@@ -20,12 +20,29 @@ async def devices():
 @router.get("/api/image")
 async def image(uri: str):
     """Proxy a record image from the box (the browser can't send the box session cookie)."""
-    for path, params in (("/web/" + uri.lstrip("./"), None), ("/device_storage/get_image", {"image_uri": uri})):
+    # The box serves both face-library (/home/appdata/...) and alarm (./record_...) images
+    # via /device_storage/get_image?image_uri=...
+    paths = [
+        ("/device_storage/get_image", {"image_uri": uri}),
+    ]
+    if uri.startswith("/"):
+        paths.append((uri, None))
+    paths.append(("/web/" + uri.lstrip("./"), None))
+
+    for path, params in paths:
         try:
             content, media_type = await box.get_bytes(path, params)
-            if media_type == "application/octet-stream":  # the box doesn't label its JPEGs
-                media_type = mimetypes.guess_type(uri)[0] or media_type
+            # Check if response is empty or a JSON/HTML error payload instead of an image
+            stripped = content.lstrip()
+            if not content or stripped.startswith(b"{") or stripped.startswith(b"<!") or stripped.startswith(b"<html"):
+                continue
+
+            if media_type in ("application/octet-stream", None, "") or not media_type.startswith("image/"):
+                guessed = mimetypes.guess_type(uri)[0]
+                media_type = guessed if guessed and guessed.startswith("image/") else "image/jpeg"
+
             return Response(content, media_type=media_type, headers={"Cache-Control": "max-age=86400"})
         except httpx.HTTPStatusError:
             continue
     raise HTTPException(404, "Image not found on the box")
+

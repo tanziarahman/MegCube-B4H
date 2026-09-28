@@ -72,6 +72,36 @@ class B4HClient:
             raise B4HError(payload.get("code"), payload.get("message"), path)
         return payload.get("data")
 
+    async def upload(
+        self,
+        path: str,
+        files: dict[str, tuple[str, bytes, str]],
+        data: dict[str, str] | None = None,
+        method: str = "POST",
+        _retry: bool = True,
+    ) -> Any:
+        """Send a multipart request to an endpoint that accepts uploaded files."""
+        if not self.session_id:
+            await self.login()
+        async with self._call_lock:
+            r = await self._http.request(
+                method,
+                path,
+                headers={"Cookie": f"sessionID={self.session_id}"},
+                data=data,
+                files=files,
+            )
+        try:
+            payload = r.json()
+        except ValueError:
+            raise B4HError(r.status_code, f"non-JSON reply (HTTP {r.status_code})", path)
+        if payload.get("code") == SESSION_LOST and _retry:
+            await self.login()
+            return await self.upload(path, files, data, method, _retry=False)
+        if payload.get("code") != 0:
+            raise B4HError(payload.get("code"), payload.get("message"), path)
+        return payload.get("data")
+
     async def get_bytes(self, path: str, params: dict | None = None) -> tuple[bytes, str]:
         """Binary download, e.g. a record image."""
         if not self.session_id:

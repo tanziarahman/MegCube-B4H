@@ -156,6 +156,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "python-dotenv" },
+    { name = "python-multipart" },
 ]
 
 [package.metadata]
@@ -163,6 +164,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"] },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
 ]
 
 [[package]]
