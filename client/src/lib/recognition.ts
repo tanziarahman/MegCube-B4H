@@ -7,6 +7,7 @@ export interface RecognitionRow {
   deviceId: string;
   device: string;
   living: string;
+  personId: string;        // box person_id of the matched library person ('' for strangers)
   name: string;
   groups: string;
   similarity: string;
@@ -21,7 +22,15 @@ export interface Device {
   name: string;
 }
 
+/** A person currently in the box's face library (from /face_manager/person/query). */
+export interface Person {
+  id: string;
+  name: string;
+}
+
 type Json = Record<string, unknown>;
+
+const MATCHED = 'face_comparison_successful';
 
 // ---------- small helpers for unknown JSON ----------
 
@@ -62,7 +71,7 @@ function findAll(obj: unknown, keys: string[]): unknown[] {
 /** The array of records inside a box response. */
 function findList(resp: unknown): unknown[] {
   if (Array.isArray(resp)) return resp;
-  const v = find(resp, ['alarm_list', 'list', 'records', 'items', 'data']);
+  const v = find(resp, ['alarm_list', 'person_list', 'list', 'records', 'items', 'data']);
   return Array.isArray(v) ? v : [];
 }
 
@@ -103,6 +112,8 @@ function formatTime(v: unknown): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+const norm = (s: unknown) => String(s ?? '').trim().toLowerCase();
+
 // ---------- mapping ----------
 
 /** Image path inside an `image_data` object: {image_data_format: 2, value: "./record_CHN0/...jpg"}. */
@@ -140,6 +151,8 @@ function toRow(rec: unknown, index: number): RecognitionRow {
     deviceId: String(find(rec, ['device_id', 'channel_id']) ?? ''),
     device: String(find(rec, ['device_name', 'channel_name', 'camera_name', 'source_name']) ?? '—'),
     living: score(find(rec, ['liveness_score', 'living_score', 'liveness', 'live_score', 'living_fraction'])),
+    // Look in the matched library entry first so we don't pick up some other id in the record.
+    personId: String((match0 ? find(match0, ['person_id']) : undefined) ?? find(rec, ['person_id']) ?? ''),
     name: String(find(rec, ['person_name', 'name']) ?? '—'),
     groups: groups.length ? Array.from(new Set(groups)).join(', ') : '—',
     similarity: score(find(rec, ['face_score', 'similarity', 'score', 'compare_score', 'match_score'])),
@@ -161,7 +174,8 @@ export interface RecognitionQuery {
   minor: string;
 }
 
-export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
+/** One raw page of records straight from the box (no filtering). */
+async function fetchRecognitionPage(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
   const params = new URLSearchParams({
     start: q.start, end: q.end, page: String(q.page), size: String(q.size), minor: q.minor,
   });
@@ -173,6 +187,51 @@ export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: Rec
   return { rows: list.map(toRow), total };
 }
 
+// How many records to pull per request when collecting a whole time range, and a safety cap.
+const CHUNK = 30;          // the backend/box refuses more than 30 records per request
+const MAX_RECORDS = 5000;
+
+/**
+ * Records for the table.
+ *
+ * Strangers: passed straight through, paginated by the box as before.
+ *
+ * Matched: the box keeps its alarm history even after a person is deleted from the face
+ * library, so we pull every record in the time range, drop the ones whose person no longer
+ * exists, and paginate what's left here. That way deleted people's rows are gone completely
+ * and "Total" / page counts are correct.
+ */
+export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
+  if (q.minor !== MATCHED) return fetchRecognitionPage(q);
+
+  let people: Person[];
+  try {
+    people = await fetchPeople();
+  } catch {
+    // Couldn't reach the person library: show the box's data unfiltered rather than an empty table.
+    return fetchRecognitionPage(q);
+  }
+  const ids = new Set(people.map((p) => p.id).filter(Boolean));
+  const names = new Set(people.map((p) => norm(p.name)).filter(Boolean));
+  const stillExists = (r: RecognitionRow) =>
+    r.personId ? ids.has(r.personId) : names.has(norm(r.name));   // no id on the record → match by name
+
+  // Collect the whole range from the box.
+  const all: RecognitionRow[] = [];
+  const first = await fetchRecognitionPage({ ...q, page: 1, size: CHUNK });
+  all.push(...first.rows);
+  const boxTotal = Math.min(first.total, MAX_RECORDS);
+  for (let p = 2; all.length < boxTotal && first.rows.length > 0; p++) {
+    const next = await fetchRecognitionPage({ ...q, page: p, size: CHUNK });
+    if (next.rows.length === 0) break;
+    all.push(...next.rows);
+  }
+
+  const kept = all.filter(stillExists);
+  const from = (q.page - 1) * q.size;
+  return { rows: kept.slice(from, from + q.size), total: kept.length };
+}
+
 export async function fetchDevices(): Promise<Device[]> {
   const res = await fetch('/api/devices', { cache: 'no-store' });
   if (!res.ok) return [];
@@ -180,4 +239,17 @@ export async function fetchDevices(): Promise<Device[]> {
     id: String(find(d, ['device_id', 'id', 'channel_id']) ?? i),
     name: String(find(d, ['device_name', 'name', 'channel_name']) ?? `Device ${i + 1}`),
   }));
+}
+
+/**
+ * Everyone currently in the box's face library, from the backend's GET /api/people
+ * (which pages through the box's /face_manager/person/query).
+ * Throws on failure so callers can fall back to unfiltered data.
+ */
+export async function fetchPeople(): Promise<Person[]> {
+  // The backend pages through the box's library and returns everyone at once.
+  const res = await fetch('/api/people', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Could not load people (${res.status})`);
+  const json = (await res.json()) as { person_list?: { person_id?: string; name?: string }[] };
+  return (json.person_list ?? []).map((p) => ({ id: String(p.person_id ?? ''), name: String(p.name ?? '') }));
 }
