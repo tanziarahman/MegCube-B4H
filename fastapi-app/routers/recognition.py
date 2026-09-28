@@ -1,7 +1,7 @@
 """Recognition records and the face-library person list."""
-from typing import Literal
+from typing import Literal, get_args
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Path, Query
 
 from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, box, to_ms
 
@@ -32,6 +32,23 @@ async def recognition(
             "ext": {"query_type": 0, "de_dup": 0},
         },
     })
+
+
+@router.delete("/api/recognition/{alarm_id}")
+async def delete_recognition(alarm_id: int = Path(..., ge=1)):
+    """Permanently delete one recognition record on the box.
+
+    Same request the box's own Records page sends (copied from its devtools payload):
+    DELETE /device_alarm/alarm_history with the record's alarm_id in id_list.
+    """
+    await box.call("DELETE", "/device_alarm/alarm_history", {
+        "condition": {
+            "type": "alarm_id",
+            "id_list": [alarm_id],
+            "alarm_type": [{"major_type": RECOG_MAJOR, "minor_type": list(get_args(RecognitionMinor))}],
+        },
+    })
+    return {"deleted": alarm_id}
 
 
 @router.get("/api/people")
