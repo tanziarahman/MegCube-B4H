@@ -1,6 +1,20 @@
 // Calls the FastAPI backend and turns the box's raw records into simple rows for the table.
 // The backend returns box data unchanged, so field names are looked up by several possible keys.
 
+/** One library person the box compared the face against (faces[0].recognition_info[n]). */
+export interface Candidate {
+  personId: string;
+  name: string;
+  groups: string;
+  similarity: string;
+  baseImg?: string;
+}
+
+export interface Attribute {
+  label: string;
+  value: string;
+}
+
 export interface RecognitionRow {
   id: string;
   time: string;            // "2026-09-27 11:53:20"
@@ -14,6 +28,10 @@ export interface RecognitionRow {
   faceImg?: string;
   panoramaImg?: string;
   baseImg?: string;
+  // for the Record details panel
+  trackId: string;
+  attributes: Attribute[];       // age, gender, hat, glasses, mask, hairstyle, beard
+  otherResults: Candidate[];     // lower-ranked candidates ("Other Result" in the box UI)
   raw: unknown;
 }
 
@@ -99,7 +117,7 @@ const imageUrl = (uri?: string) =>
 
 const score = (v: unknown) => {
   const n = Number(v);
-  if (v === undefined || Number.isNaN(n)) return '—';
+  if (v === undefined || v === null || v === '' || Number.isNaN(n)) return '—';
   return (n > 0 && n <= 1 ? n * 100 : n).toFixed(1);   // 0.79 -> 79.0
 };
 
@@ -114,6 +132,46 @@ function formatTime(v: unknown): string {
 
 const norm = (s: unknown) => String(s ?? '').trim().toLowerCase();
 
+// ---------- face attributes ----------
+// The box sends attributes as numeric codes (1-based). Labels are copied from the box's own
+// web UI language file (megcube-b4h-web/src/i18n/langs/en.js, the face-attribute section:
+// gender1.., hair1.., beard1.., hat1.., respirator1.., glasses1..).
+// Codes not listed here are shown as "Code N" so nothing is silently mislabelled.
+
+const GENDER: Record<number, string> = { 1: 'Unknown', 2: 'Male', 3: 'Female' };
+const HAT: Record<number, string> = { 1: 'Unknown', 2: 'Not wearing a hat', 3: 'Wearing a hat' };
+const MASK: Record<number, string> = { 1: 'Unknown', 2: 'Not wearing a mask', 3: 'Wearing a mask' };
+const GLASSES: Record<number, string> = { 1: 'Unknown', 2: 'Not wearing glasses', 3: 'Wearing glasses' };
+const HAIR: Record<number, string> = {
+  1: 'Unknown', 2: 'Flat top', 3: 'Middle part', 4: 'Side part', 5: 'Frontal baldness',
+  6: 'Top baldness', 7: 'Baldness', 8: 'Curly', 9: 'Waves', 10: 'Braid', 11: 'Updo',
+  12: 'Shoulder-length hair', 13: 'Short hair', 14: 'Long hair',
+};
+const BEARD: Record<number, string> = {
+  1: 'Unknown', 2: 'No beard', 3: 'Walrus moustache', 4: 'Whiskers', 5: 'Toothbrush moustache',
+  6: 'Becoming moustache', 7: 'Goatee', 8: 'White beard', 9: 'Imperial',
+};
+
+function label(map: Record<number, string>, v: unknown): string {
+  if (v === undefined || v === null || v === '') return '—';
+  const n = Number(v);
+  return map[n] ?? `Code ${String(v)}`;
+}
+
+function faceAttributes(face: Json | undefined): Attribute[] {
+  if (!face) return [];
+  const age = Number(face.age);
+  return [
+    { label: 'Age', value: age > 0 ? String(age) : '—' },
+    { label: 'Gender', value: label(GENDER, face.gender) },
+    { label: 'Hat', value: label(HAT, face.wear_hat) },
+    { label: 'Glasses', value: label(GLASSES, face.wear_glasses) },
+    { label: 'Mask', value: label(MASK, face.wear_respirator) },
+    { label: 'Hairstyle', value: label(HAIR, face.hair_style) },
+    { label: 'Beard', value: label(BEARD, face.beard_class) },
+  ];
+}
+
 // ---------- mapping ----------
 
 /** Image path inside an `image_data` object: {image_data_format: 2, value: "./record_CHN0/...jpg"}. */
@@ -122,12 +180,27 @@ function imagePath(v: unknown): string | undefined {
   return typeof d?.value === 'string' && d.value ? d.value : undefined;
 }
 
+function toCandidate(c: Json): Candidate {
+  const groups = ((c.group_info as Json[] | undefined) ?? [])
+    .map((g) => String(g.group_name ?? ''))
+    .filter(Boolean);
+  return {
+    personId: String(find(c, ['person_id']) ?? ''),
+    // name may sit directly on the entry or nested (e.g. person_info.name) depending on firmware
+    name: String(find(c, ['person_name', 'name']) ?? ''),
+    groups: groups.length ? Array.from(new Set(groups)).join(', ') : '—',
+    similarity: score(c.face_score),
+    baseImg: imageUrl(imagePath(c.image_data)),
+  };
+}
+
 function toRow(rec: unknown, index: number): RecognitionRow {
   // Box layout: faces[0].image_data = face crop, faces[0].recognition_info[0].image_data = library photo,
-  // full_images[0].image_data = panorama.
+  // full_images[0].image_data = panorama. recognition_info is ranked best match first.
   const r = rec as Json;
   const face0 = (r.faces as Json[] | undefined)?.[0];
-  const match0 = (face0?.recognition_info as Json[] | undefined)?.[0];
+  const infos = (face0?.recognition_info as Json[] | undefined) ?? [];
+  const match0 = infos[0];
   const full0 = (r.full_images as Json[] | undefined)?.[0];
   const known = {
     face: imagePath(face0?.image_data),
@@ -142,7 +215,13 @@ function toRow(rec: unknown, index: number): RecognitionRow {
   const base = known.base ?? byType(['base', 'library', 'register', 'person', 'db']);
   const rest = images.map((i) => i.uri).filter((u) => u !== face && u !== panorama && u !== base);
 
-  const groups = findAll(rec, ['group_name', 'group_names']).map(String);
+  const top = match0 ? toCandidate(match0) : undefined;
+  // Groups of the matched person only (not of every lower-ranked candidate).
+  const fallbackGroups = findAll(rec, ['group_name', 'group_names']).map(String);
+  const groups = top && top.groups !== '—'
+    ? top.groups
+    : fallbackGroups.length ? Array.from(new Set(fallbackGroups)).join(', ') : '—';
+
   const timeValue = find(rec, ['time_ms', 'capture_time', 'alarm_time', 'timestamp', 'time']);
 
   return {
@@ -151,15 +230,17 @@ function toRow(rec: unknown, index: number): RecognitionRow {
     deviceId: String(find(rec, ['device_id', 'channel_id']) ?? ''),
     device: String(find(rec, ['device_name', 'channel_name', 'camera_name', 'source_name']) ?? '—'),
     living: score(find(rec, ['liveness_score', 'living_score', 'liveness', 'live_score', 'living_fraction'])),
-    // Look in the matched library entry first so we don't pick up some other id in the record.
-    personId: String((match0 ? find(match0, ['person_id']) : undefined) ?? find(rec, ['person_id']) ?? ''),
-    name: String(find(rec, ['person_name', 'name']) ?? '—'),
-    groups: groups.length ? Array.from(new Set(groups)).join(', ') : '—',
+    personId: top?.personId || String(find(rec, ['person_id']) ?? ''),
+    name: top?.name || String(find(rec, ['person_name', 'name']) ?? '—'),
+    groups,
     similarity: score(find(rec, ['face_score', 'similarity', 'score', 'compare_score', 'match_score'])),
     // unlabelled images: assume order face, panorama, base
     faceImg: imageUrl(face ?? rest.shift()),
     panoramaImg: imageUrl(panorama ?? rest.shift()),
     baseImg: imageUrl(base ?? rest.shift()),
+    trackId: String(face0?.track_id ?? find(rec, ['track_id']) ?? '—'),
+    attributes: faceAttributes(face0),
+    otherResults: infos.slice(1).map(toCandidate).filter((c) => c.name),   // box pads with empty entries
     raw: rec,
   };
 }
@@ -194,27 +275,33 @@ const MAX_RECORDS = 5000;
 /**
  * Records for the table.
  *
- * Strangers: passed straight through, paginated by the box as before.
- *
- * Matched: the box keeps its alarm history even after a person is deleted from the face
- * library, so we pull every record in the time range, drop the ones whose person no longer
- * exists, and paginate what's left here. That way deleted people's rows are gone completely
- * and "Total" / page counts are correct.
+ * The box keeps its alarm history even after a person is deleted from the face library.
+ * - Matched: we pull every record in the time range, drop the ones whose person no longer
+ *   exists, and paginate what's left here, so deleted people's rows are gone completely and
+ *   "Total" / page counts are correct.
+ * - Both modes: deleted people are also dropped from each row's "Other results".
+ * If the person library can't be loaded, the box's data is shown unfiltered.
  */
 export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
-  if (q.minor !== MATCHED) return fetchRecognitionPage(q);
-
-  let people: Person[];
+  let exists: ((id: string, name: string) => boolean) | null = null;
   try {
-    people = await fetchPeople();
+    const people = await fetchPeople();
+    const ids = new Set(people.map((p) => p.id).filter(Boolean));
+    const names = new Set(people.map((p) => norm(p.name)).filter(Boolean));
+    // Still in the library if either the id or the name matches. Records and the person list
+    // don't always carry ids from the same place, so id alone can wrongly look "deleted".
+    exists = (id, name) => (!!id && ids.has(id)) || names.has(norm(name));
   } catch {
-    // Couldn't reach the person library: show the box's data unfiltered rather than an empty table.
-    return fetchRecognitionPage(q);
+    exists = null;
   }
-  const ids = new Set(people.map((p) => p.id).filter(Boolean));
-  const names = new Set(people.map((p) => norm(p.name)).filter(Boolean));
-  const stillExists = (r: RecognitionRow) =>
-    r.personId ? ids.has(r.personId) : names.has(norm(r.name));   // no id on the record → match by name
+
+  const prune = (r: RecognitionRow): RecognitionRow =>
+    exists ? { ...r, otherResults: r.otherResults.filter((c) => exists!(c.personId, c.name)) } : r;
+
+  if (q.minor !== MATCHED || !exists) {
+    const page = await fetchRecognitionPage(q);
+    return { rows: page.rows.map(prune), total: page.total };
+  }
 
   // Collect the whole range from the box.
   const all: RecognitionRow[] = [];
@@ -227,7 +314,7 @@ export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: Rec
     all.push(...next.rows);
   }
 
-  const kept = all.filter(stillExists);
+  const kept = all.filter((r) => exists!(r.personId, r.name)).map(prune);
   const from = (q.page - 1) * q.size;
   return { rows: kept.slice(from, from + q.size), total: kept.length };
 }

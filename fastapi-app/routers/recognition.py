@@ -27,6 +27,9 @@ async def recognition(
             "start_time": str(to_ms(start)),
             "end_time": str(to_ms(end)),
             "alarm_type": [{"major_type": RECOG_MAJOR, "minor_type": [minor]}],
+            # Sent by the box's own Records page (copied from its devtools payload). Without it the
+            # box may return a trimmed record; with de_dup 0 every record comes back, un-merged.
+            "ext": {"query_type": 0, "de_dup": 0},
         },
     })
 
