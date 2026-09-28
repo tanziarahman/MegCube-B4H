@@ -88,6 +88,36 @@ async def personnel(
     }
 
 
+def _parse_group_ids(group_ids: str) -> list[str]:
+    try:
+        parsed = json.loads(group_ids)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(422, "group_ids must be a JSON array") from exc
+    if not isinstance(parsed, list) or not all(isinstance(value, (str, int)) for value in parsed):
+        raise HTTPException(422, "group_ids must be a JSON array of ids")
+    return [str(value) for value in parsed]
+
+
+async def _read_photo(photo: UploadFile | None) -> tuple[bytes, UploadFile] | None:
+    """Return the uploaded image, or None when the file input was left empty.
+
+    Browsers submit an empty file input as a nameless application/octet-stream part,
+    so "no photo" has to be detected by filename/size rather than by `photo is None`.
+    """
+    if photo is None or not photo.filename:
+        return None
+    image = await photo.read()
+    if not image:
+        return None
+    if not photo.content_type or not photo.content_type.startswith("image/"):
+        raise HTTPException(415, "photo must be an image")
+    return image, photo
+
+
+# The box's own web UI talks to /face_manager/person (POST add, PUT edit, DELETE remove):
+# multipart with the image in "face1" and a JSON "person_info" field; groups are
+# bound separately via /face_manager/person_bind on edit.
+
 @router.post("/api/personnel", status_code=201)
 async def add_personnel(
     name: str = Form(..., min_length=1),
@@ -101,33 +131,32 @@ async def add_personnel(
     person_type: str = Form(""),
 ):
     """Create a face-library person and upload the reference photo."""
-    if not photo.content_type or not photo.content_type.startswith("image/"):
-        raise HTTPException(415, "photo must be an image")
-    try:
-        parsed_group_ids = json.loads(group_ids)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(422, "group_ids must be a JSON array") from exc
-    if not isinstance(parsed_group_ids, list) or not all(isinstance(value, (str, int)) for value in parsed_group_ids):
-        raise HTTPException(422, "group_ids must be a JSON array of ids")
+    upload = await _read_photo(photo)
+    if not upload:
+        raise HTTPException(422, "a reference photo is required")
+    image, photo = upload
+    groups = _parse_group_ids(group_ids)
 
-    image = await photo.read()
-    info = {
-        "birthday": birthday,
-        "code": code,
-        "gender": gender,
-        "id": person_id,
-        "name": name,
-        "remarks": remarks,
-        "type": person_type,
+    payload: dict[str, Any] = {
+        "person_info": {
+            "birthday": birthday,
+            "code": code,
+            "gender": gender,
+            "id": person_id,
+            "name": name,
+            "remarks": remarks,
+            "type": person_type,
+        },
+        "face_data": {"data_type": 0, "save_image": True, "feature_version": "", "data": [{"data_size": len(image)}]},
     }
-    data = {
-        "person_info": json.dumps(info),
-        "group_ids": json.dumps([str(value) for value in parsed_group_ids]),
-    }
+    if groups:
+        payload["groups"] = [{"group_id": g} for g in groups]
     result = await box.upload(
-        "/face_manager/person/add",
-        files={"face_image1": (photo.filename or "face.jpg", image, photo.content_type)},
-        data=data,
+        "/face_manager/person",
+        files={
+            "face1": (photo.filename or "face.jpg", image, photo.content_type),
+            "person_info": (None, json.dumps(payload)),
+        },
     )
     return result or {"message": "created"}
 
@@ -142,39 +171,42 @@ async def update_personnel(
     gender: int = Form(0),
     code: str = Form(""),
     remarks: str = Form(""),
-    person_type: str = Form(""),
 ):
     """Update a face-library person, optionally replacing the reference photo."""
-    try:
-        parsed_group_ids = json.loads(group_ids)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(422, "group_ids must be a JSON array") from exc
-    if not isinstance(parsed_group_ids, list) or not all(isinstance(value, (str, int)) for value in parsed_group_ids):
-        raise HTTPException(422, "group_ids must be a JSON array of ids")
+    groups = _parse_group_ids(group_ids)
+    upload = await _read_photo(photo)
 
-    info = {
-        "birthday": birthday,
-        "code": code,
-        "gender": gender,
-        "id": person_id,
-        "name": name,
-        "remarks": remarks,
-        "type": person_type,
+    payload: dict[str, Any] = {
+        "person_id": person_id,
+        "person_info": {"birthday": birthday, "code": code, "gender": gender, "name": name, "remarks": remarks},
     }
-    files = {}
-    if photo:
-        if not photo.content_type or not photo.content_type.startswith("image/"):
-            raise HTTPException(415, "photo must be an image")
-        files["face_image1"] = (photo.filename or "face.jpg", await photo.read(), photo.content_type)
-    return await box.upload(
-        "/face_manager/person/modify",
-        files=files,
-        data={"person_info": json.dumps(info), "group_ids": json.dumps([str(value) for value in parsed_group_ids])},
-        method="PUT",
-    )
+    # person_info goes as a multipart field even without a photo, so the box always gets multipart.
+    files: dict[str, tuple] = {}
+    if upload:
+        image, photo = upload
+        payload["face_data"] = {
+            "data_type": 0,
+            "save_image": True,
+            "data": [{"data_size": len(image), "image_type": photo.content_type.split("/")[1]}],
+        }
+        files["face1"] = (photo.filename or "face.jpg", image, photo.content_type)
+    files["person_info"] = (None, json.dumps(payload))
+    result = await box.upload("/face_manager/person", files=files, method="PUT")
+
+    # Like the box UI, an empty selection leaves the current groups untouched.
+    if groups:
+        await box.call("PUT", "/face_manager/person_bind", {
+            "person_id": person_id,
+            "face_groups": [{"group_id": g} for g in groups],
+        })
+    return result or {"message": "updated"}
 
 
 @router.delete("/api/personnel/{person_id}")
 async def delete_personnel(person_id: str):
     """Delete a person from the box face library."""
-    return await box.call("POST", "/face_manager/person/delete", {"person_id": person_id})
+    return await box.call("DELETE", "/face_manager/person", {
+        "force": True,
+        "all": False,
+        "person_id_list": [person_id],
+    })

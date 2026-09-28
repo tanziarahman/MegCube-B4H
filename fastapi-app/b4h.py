@@ -75,7 +75,7 @@ class B4HClient:
     async def upload(
         self,
         path: str,
-        files: dict[str, tuple[str, bytes, str]],
+        files: dict[str, tuple],
         data: dict[str, str] | None = None,
         method: str = "POST",
         _retry: bool = True,
