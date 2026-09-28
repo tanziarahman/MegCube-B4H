@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from b4h import B4HError
 from core import box, log
 from routers import capture, common, preview, personnel, recognition
+from routers import capture, common, devices, personnel, preview, recognition
 
 
 @asynccontextmanager
@@ -45,3 +46,4 @@ app.include_router(capture.router)
 app.include_router(common.router)
 app.include_router(preview.router)
 app.include_router(personnel.router)
+app.include_router(devices.router)
