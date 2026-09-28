@@ -19,7 +19,7 @@ log = logging.getLogger("b4h")
 box = B4HClient(
     os.getenv("B4H_BASE_URL", "https://192.168.90.200"),
     os.getenv("B4H_USER", "admin"),
-    os.getenv("B4H_PASS", ""),
+    os.getenv("B4H_PASS", "Shohan@98"),
 )
 
 # Recognitions are stored on the box as alarms of this major type.
