@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, RotateCcw, Search } from 'lucide-react';
+import { AlertCircle, Eye, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { fetchDevices, fetchRecognition, deleteRecognition, type Device, type RecognitionRow } from '@/lib/recognition';
 import RecognitionDrawer from './RecognitionDrawer';
 
@@ -248,20 +248,27 @@ export default function RecognitionTable() {
                   <td className="px-4 py-2.5 font-medium">{r.name}</td>
                   <td className="max-w-[180px] truncate px-4 py-2.5" title={r.groups}>{r.groups}</td>
                   <td className="px-4 py-2.5 font-mono">{r.similarity}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                    <button
-                      onClick={() => setSelected(r)}
-                      className="h-7 rounded-md border border-line bg-white px-3 text-[12px] font-medium hover:bg-ground"
-                    >
-                      Details
-                    </button>
-                    <button
-                      onClick={() => setConfirming(r)}
-                      disabled={r.alarmId == null || deletingId !== null}
-                      className="ml-2 h-7 rounded-md border border-[#F3C1C1] bg-white px-3 text-[12px] font-medium text-crit hover:bg-[#FDECEC] disabled:opacity-40"
-                    >
-                      {deletingId === r.id ? 'Deleting…' : 'Delete'}
-                    </button>
+                  <td className="px-4 py-2.5">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(r)}
+                        title="View details"
+                        className="flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium hover:bg-ground"
+                      >
+                        <Eye size={14} /> Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(r)}
+                        disabled={r.alarmId == null || deletingId !== null}
+                        title="Delete record"
+                        aria-label={`Delete the recognition of ${r.name} at ${r.time}`}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-crit hover:bg-crit-bg disabled:opacity-40"
+                      >
+                        {deletingId === r.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
             ))}

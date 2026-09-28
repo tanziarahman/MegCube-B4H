@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, List, RefreshCw, Video, Wifi, WifiOff } from 'lucide-react';
-import { fetchDeviceDetails, type DeviceDetail } from '@/lib/devices';
+import { LayoutGrid, List, Pencil, Plus, RefreshCw, Trash2, Video, Wifi, WifiOff } from 'lucide-react';
+import { createDevice, deleteDevice, fetchDeviceDetails, type DeviceDetail } from '@/lib/devices';
+import { ConfirmDeleteDevice, DeviceFormModal, type DeviceFormValues } from './DeviceModals';
 
 const inputCls =
   'rounded-lg border border-line bg-white px-3 py-2.5 text-[14.5px] text-slate-700 outline-none transition focus:border-slate-400';
@@ -53,27 +54,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// Edit / Delete need the box's own requests for changing and removing a camera (not captured yet),
-// so they stay disabled until those are wired in. Styles match the Recognition page's buttons.
-const ACTIONS_READY = false;
-const NOT_READY_HINT = 'Not available yet: needs the box\'s edit/delete request';
+type Handlers = { onEdit: (d: DeviceDetail) => void; onDelete: (d: DeviceDetail) => void };
 
-function DeviceActions({ d }: { d: DeviceDetail }) {
+function DeviceActions({ d, onEdit, onDelete }: { d: DeviceDetail } & Handlers) {
   return (
-    <div className="flex items-center gap-2 whitespace-nowrap">
+    <div className="flex items-center gap-1">
       <button
-        disabled={!ACTIONS_READY}
-        title={ACTIONS_READY ? `Edit ${d.name}` : NOT_READY_HINT}
-        className="h-8 rounded-md border border-line bg-white px-3.5 text-[13.5px] font-medium hover:bg-ground disabled:cursor-not-allowed disabled:opacity-40"
+        type="button"
+        onClick={() => onEdit(d)}
+        title="Edit device"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium hover:bg-ground"
       >
-        Edit
+        <Pencil size={14} /> Edit
       </button>
       <button
-        disabled={!ACTIONS_READY}
-        title={ACTIONS_READY ? `Delete ${d.name}` : NOT_READY_HINT}
-        className="h-8 rounded-md border border-[#F3C1C1] bg-white px-3.5 text-[13.5px] font-medium text-crit hover:bg-[#FDECEC] disabled:cursor-not-allowed disabled:opacity-40"
+        type="button"
+        onClick={() => onDelete(d)}
+        title="Delete device"
+        aria-label={`Delete ${d.name}`}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-crit hover:bg-crit-bg"
       >
-        Delete
+        <Trash2 size={15} />
       </button>
     </div>
   );
@@ -81,7 +82,7 @@ function DeviceActions({ d }: { d: DeviceDetail }) {
 
 // ---------- views ----------
 
-function DeviceCard({ d }: { d: DeviceDetail }) {
+function DeviceCard({ d, onEdit, onDelete }: { d: DeviceDetail } & Handlers) {
   const { host, path } = splitAddress(d.address);
   return (
     <div className="rounded-xl border border-line bg-white p-4 transition hover:shadow-sm">
@@ -117,13 +118,13 @@ function DeviceCard({ d }: { d: DeviceDetail }) {
             {d.pullingStream ? 'Streaming' : 'Not streaming'}
           </span>
         )}
-        <div className="ml-auto"><DeviceActions d={d} /></div>
+        <div className="ml-auto"><DeviceActions d={d} onEdit={onEdit} onDelete={onDelete} /></div>
       </div>
     </div>
   );
 }
 
-function DeviceList({ rows }: { rows: DeviceDetail[] }) {
+function DeviceList({ rows, onEdit, onDelete }: { rows: DeviceDetail[] } & Handlers) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white">
       <table className="w-full text-left text-[14.5px]">
@@ -152,7 +153,7 @@ function DeviceList({ rows }: { rows: DeviceDetail[] }) {
                 <td className="px-4 py-3.5 font-mono text-[13.5px] text-slate-700">{host}</td>
                 <td className="max-w-[320px] truncate px-4 py-3.5 font-mono text-[13.5px] text-slate-500" title={d.address}>{path || '—'}</td>
                 <td className="px-4 py-3.5"><StatusPill d={d} /></td>
-                <td className="px-4 py-3.5"><div className="flex justify-end"><DeviceActions d={d} /></div></td>
+                <td className="px-4 py-3.5"><div className="flex justify-end"><DeviceActions d={d} onEdit={onEdit} onDelete={onDelete} /></div></td>
               </tr>
             );
           })}
@@ -199,6 +200,30 @@ export default function DevicesTable() {
   const filtered = !!(name || status || address);
   const reset = () => { setName(''); setStatus(''); setAddress(''); };
 
+  // dialogs: form is 'new' or the device being edited; deleting is the device to confirm
+  const [form, setForm] = useState<'new' | DeviceDetail | null>(null);
+  const [deleting, setDeleting] = useState<DeviceDetail | null>(null);
+  const openEdit = useCallback((d: DeviceDetail) => setForm(d), []);
+  const closeForm = useCallback(() => setForm(null), []);
+  const closeDelete = useCallback(() => setDeleting(null), []);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // New device: add on the box, then reload so it appears with its status.
+  const addDevice = async (v: DeviceFormValues) => {
+    const id = await createDevice({ name: v.name, protocol: v.protocol, url: v.url, user: v.user, password: v.password });
+    setNotice(`Added “${v.name}” as device #${id}.`);
+    await load();
+  };
+
+  // Delete: remove on the box, then reload. Errors are shown inside the dialog.
+  const removeDevice = async () => {
+    if (!deleting) return;
+    const d = deleting;
+    await deleteDevice(d.id);
+    setNotice(`Deleted “${d.name}” (#${d.id}).`);
+    await load();
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {/* Summary */}
@@ -231,6 +256,12 @@ export default function DevicesTable() {
             </button>
           )}
           <button
+            onClick={() => setForm('new')}
+            className="flex items-center gap-1.5 rounded-lg bg-pri px-3.5 py-2 text-[14.5px] font-medium text-white transition hover:bg-[#1A43A0]"
+          >
+            <Plus size={16} /> New device
+          </button>
+          <button
             onClick={load}
             disabled={loading}
             className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[14.5px] font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
@@ -256,6 +287,13 @@ export default function DevicesTable() {
         </div>
       </div>
 
+      {notice && (
+        <div className="flex items-center justify-between rounded-lg border border-[#BFE3CC] bg-ok-bg px-4 py-3 text-[14px] text-ok">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} className="font-medium hover:underline">Dismiss</button>
+        </div>
+      )}
+
       {/* Content */}
       {error ? (
         <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-[14.5px] text-red-700">
@@ -273,15 +311,18 @@ export default function DevicesTable() {
         </div>
       ) : view === 'grid' ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((d) => <DeviceCard key={d.id} d={d} />)}
+          {visible.map((d) => <DeviceCard key={d.id} d={d} onEdit={openEdit} onDelete={setDeleting} />)}
         </div>
       ) : (
-        <DeviceList rows={visible} />
+        <DeviceList rows={visible} onEdit={openEdit} onDelete={setDeleting} />
       )}
 
       {filtered && !error && (
         <p className="text-[13.5px] text-mute">Showing {visible.length} of {devices.length} cameras</p>
       )}
+
+      {form && <DeviceFormModal device={form === 'new' ? null : form} onClose={closeForm} onSubmit={form === 'new' ? addDevice : undefined} />}
+      {deleting && <ConfirmDeleteDevice device={deleting} onCancel={closeDelete} onConfirm={removeDevice} />}
     </div>
   );
 }

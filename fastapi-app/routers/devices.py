@@ -1,7 +1,9 @@
-"""Device management page: camera list with connection status."""
-from urllib.parse import urlsplit, urlunsplit
+"""Device management page: camera list with connection status, adding and deleting cameras."""
+from typing import Literal
+from urllib.parse import quote, urlsplit, urlunsplit
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Path
+from pydantic import BaseModel, Field
 
 from core import box
 
@@ -59,3 +61,70 @@ async def devices_detail():
             "pulling_stream": any(c.get("pull_stream") for c in channels),
         })
     return out
+
+
+# ---------- add a camera ----------
+
+class DeviceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    protocol: Literal["rtsp"] = "rtsp"
+    url: str = Field(min_length=8, max_length=512)        # rtsp://host:port/path (credentials optional)
+    user: str = Field("", max_length=64)
+    password: str = Field("", max_length=128)
+
+
+def _rtsp_url(url: str, user: str, password: str) -> tuple[str, str, str]:
+    """Build the URL the box stores: rtsp://user:password@host:port/path.
+
+    Credentials may come from the fields or already be inside the pasted URL; the fields win.
+    Returns (url_with_credentials, user, password).
+    """
+    parts = urlsplit(url.strip())
+    if parts.scheme.lower() != "rtsp" or not parts.hostname:
+        raise HTTPException(422, "RTSP address must look like rtsp://host:port/path")
+    user = user or (parts.username or "")
+    password = password or (parts.password or "")
+    host = parts.hostname + (f":{parts.port}" if parts.port else "")
+    netloc = f"{quote(user, safe='')}:{quote(password, safe='')}@{host}" if user else host
+    return urlunsplit(("rtsp", netloc, parts.path, parts.query, parts.fragment)), user, password
+
+
+@router.post("/api/devices", status_code=201)
+async def create_device(body: DeviceIn):
+    """Add a camera to the box.
+
+    Same request the box's own "New device" dialog sends (copied from its devtools payload):
+    POST /device_access/device {device_id, device_name, proto, rtsp_param: {user, password, url}}.
+    Like the box UI, the new camera gets the lowest device_id that isn't in use.
+    """
+    config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
+    used = {d.get("device_id") for d in config}
+    if any((d.get("device_name") or "").strip().lower() == body.name.strip().lower() for d in config):
+        raise HTTPException(409, f"A device named '{body.name}' already exists")
+    device_id = next(i for i in range(1, len(used) + 2) if i not in used)
+
+    url, user, password = _rtsp_url(body.url, body.user, body.password)
+    await box.call("POST", "/device_access/device", {
+        "device_id": device_id,
+        "device_name": body.name.strip(),
+        "proto": body.protocol,
+        "rtsp_param": {"user": user, "password": password, "url": url},
+    })
+    return {"device_id": device_id}
+
+
+# ---------- delete a camera ----------
+
+@router.delete("/api/devices/{device_id}")
+async def delete_device(device_id: int = Path(..., ge=1)):
+    """Remove a camera from the box.
+
+    Same request the box's own Device page sends (copied from its devtools payload):
+    DELETE /device_access/device {device_id}. Checks the id exists first, so a stale page
+    can't send the box a delete for something that isn't there.
+    """
+    config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
+    if not any(d.get("device_id") == device_id for d in config):
+        raise HTTPException(404, f"Device #{device_id} is not configured on the box")
+    await box.call("DELETE", "/device_access/device", {"device_id": device_id})
+    return {"deleted": device_id}
