@@ -17,6 +17,7 @@ export interface Attribute {
 
 export interface RecognitionRow {
   id: string;
+  alarmId: number | null;  // box alarm_id, used to delete the record
   time: string;            // "2026-09-27 11:53:20"
   deviceId: string;
   device: string;
@@ -185,7 +186,8 @@ function toCandidate(c: Json): Candidate {
     .map((g) => String(g.group_name ?? ''))
     .filter(Boolean);
   return {
-    personId: String(find(c, ['person_id']) ?? ''),
+    // the box calls it person_uuid inside recognition_info; same value as person_id in the person list
+    personId: String(find(c, ['person_id', 'person_uuid']) ?? ''),
     // name may sit directly on the entry or nested (e.g. person_info.name) depending on firmware
     name: String(find(c, ['person_name', 'name']) ?? ''),
     groups: groups.length ? Array.from(new Set(groups)).join(', ') : '—',
@@ -226,11 +228,12 @@ function toRow(rec: unknown, index: number): RecognitionRow {
 
   return {
     id: String(find(rec, ['data_uuid', 'alarm_id', 'record_id', 'uuid', 'id']) ?? `${index}-${timeValue}`),
+    alarmId: Number((r.additional as Json | undefined)?.alarm_id) || null,
     time: formatTime(timeValue),
     deviceId: String(find(rec, ['device_id', 'channel_id']) ?? ''),
     device: String(find(rec, ['device_name', 'channel_name', 'camera_name', 'source_name']) ?? '—'),
     living: score(find(rec, ['liveness_score', 'living_score', 'liveness', 'live_score', 'living_fraction'])),
-    personId: top?.personId || String(find(rec, ['person_id']) ?? ''),
+    personId: top?.personId || String(find(rec, ['person_id', 'person_uuid']) ?? ''),
     name: top?.name || String(find(rec, ['person_name', 'name']) ?? '—'),
     groups,
     similarity: score(find(rec, ['face_score', 'similarity', 'score', 'compare_score', 'match_score'])),
@@ -317,6 +320,12 @@ export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: Rec
   const kept = all.filter((r) => exists!(r.personId, r.name)).map(prune);
   const from = (q.page - 1) * q.size;
   return { rows: kept.slice(from, from + q.size), total: kept.length };
+}
+
+/** Permanently delete one recognition record on the box. Throws with the backend's message on failure. */
+export async function deleteRecognition(alarmId: number): Promise<void> {
+  const res = await fetch(`/api/recognition/${alarmId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? `Delete failed (${res.status})`);
 }
 
 export async function fetchDevices(): Promise<Device[]> {
