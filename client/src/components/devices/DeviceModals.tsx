@@ -12,8 +12,18 @@ export const DELETE_READY = true;
 const NOT_READY_NOTE = 'Saving to the box isn’t connected yet.';
 
 // Options the box is known to use. Add more here once the box's lists are captured.
-const DEVICE_TYPES = [{ value: 'video', label: 'Video' }];
-const PROTOCOLS = [{ value: 'rtsp', label: 'RTSP' }];
+const DEVICE_TYPES = [
+  { value: 'video', label: 'Video' },
+  { value: 'picture', label: 'Picture' },
+];
+// Only the Video "New device" request has been captured so far.
+const ADDABLE_TYPES = ['video'];
+const PROTOCOLS = [
+  { value: 'rtsp', label: 'RTSP' },
+  { value: 'gb28181', label: 'GB28181' },
+];
+// Only the RTSP "New device" request has been captured so far.
+const ADDABLE_PROTOCOLS = ['rtsp'];
 
 const input =
   'mt-1 block w-full rounded-lg border border-line bg-white px-3 py-2.5 text-[14.5px] text-slate-700 outline-none transition focus:border-pri disabled:bg-ground disabled:text-mute';
@@ -78,9 +88,13 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
   onSubmit?: (values: DeviceFormValues) => Promise<void>;
 }) {
   const editing = device !== null;
-  const ready = editing ? UPDATE_READY : CREATE_READY;
+  const typeValue = editing ? DEVICE_TYPES.find((t) => t.label === device.type)?.value ?? '' : '';
+  const [type, setType] = useState(typeValue);
   const initial = editing ? fromAddress(device.address) : { url: '', user: '' };
   const [protocol, setProtocol] = useState(editing ? device.protocol.toLowerCase() : '');
+  const typeSupported = !type || ADDABLE_TYPES.includes(type);
+  const protocolSupported = !protocol || ADDABLE_PROTOCOLS.includes(protocol);
+  const ready = editing ? UPDATE_READY : CREATE_READY && typeSupported && protocolSupported;
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +105,7 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
     const f = new FormData(e.currentTarget);
     const values: DeviceFormValues = {
       name: String(f.get('name') ?? '').trim(),
-      type: String(f.get('type') ?? ''),
+      type,
       protocol,
       url: String(f.get('url') ?? '').trim(),
       user: String(f.get('user') ?? '').trim(),
@@ -108,10 +122,6 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
       setSaving(false);
     }
   };
-
-  const typeValue = editing
-    ? DEVICE_TYPES.find((t) => t.label === device.type)?.value ?? ''
-    : '';
 
   return (
     <Shell
@@ -135,7 +145,7 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={label}>
               Device type <span className="text-crit">*</span>
-              <select required name="type" defaultValue={typeValue} className={input}>
+              <select required name="type" value={type} onChange={(e) => setType(e.target.value)} className={input}>
                 <option value="" disabled>Please select</option>
                 {DEVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -199,11 +209,28 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
             </div>
           )}
 
+          {protocol === 'gb28181' && (
+            <p className="rounded-lg border border-dashed border-line bg-slate-50/60 px-4 py-3 text-[13.5px] text-mute">
+              GB28181 cameras register with the box using IDs instead of a stream address. Their
+              settings will appear here once that part is connected.
+            </p>
+          )}
+
           {error && <p className="rounded-md bg-crit-bg px-3 py-2 text-[13px] text-crit">{error}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
-          {!ready && <span className="mr-auto text-[12.5px] text-mute">{NOT_READY_NOTE}</span>}
+          {!ready && (
+            <span className="mr-auto text-[12.5px] text-mute">
+              {editing
+                ? NOT_READY_NOTE
+                : !typeSupported
+                  ? 'Adding Picture devices isn’t connected yet.'
+                  : !protocolSupported
+                    ? 'Adding GB28181 devices isn’t connected yet.'
+                    : NOT_READY_NOTE}
+            </span>
+          )}
           <button type="button" disabled={saving} onClick={onClose} className="h-9 rounded-md border border-line px-3 text-[13.5px] hover:bg-ground">
             Cancel
           </button>

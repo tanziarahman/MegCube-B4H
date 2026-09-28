@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, List, Pencil, Plus, RefreshCw, Trash2, Video, Wifi, WifiOff } from 'lucide-react';
-import { createDevice, deleteDevice, fetchDeviceDetails, type DeviceDetail } from '@/lib/devices';
+import { createDevice, deleteDevice, fetchDeviceDetails, type DeviceDetail, type DeviceType } from '@/lib/devices';
 import { ConfirmDeleteDevice, DeviceFormModal, type DeviceFormValues } from './DeviceModals';
 
 const inputCls =
@@ -210,7 +210,7 @@ export default function DevicesTable() {
 
   // New device: add on the box, then reload so it appears with its status.
   const addDevice = async (v: DeviceFormValues) => {
-    const id = await createDevice({ name: v.name, protocol: v.protocol, url: v.url, user: v.user, password: v.password });
+    const id = await createDevice({ name: v.name, type: v.type as DeviceType, protocol: v.protocol, url: v.url, user: v.user, password: v.password });
     setNotice(`Added “${v.name}” as device #${id}.`);
     await load();
   };

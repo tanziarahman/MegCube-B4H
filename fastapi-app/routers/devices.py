@@ -9,8 +9,9 @@ from core import box
 
 router = APIRouter()
 
-# channel_type values seen on the box. Only 1 is confirmed (the box UI shows it as "Video").
-_CHANNEL_TYPES = {1: "Video"}
+# channel_type values. The box has two device types: Video and Picture.
+# 1 = Video is confirmed from device_config; 2 = Picture is assumed (not yet seen in a response).
+_CHANNEL_TYPES = {1: "Video", 2: "Picture"}
 
 # device_state.state values. Only 0 is confirmed (the box UI shows it as "Online").
 # Anything else is reported as offline together with its code, so nothing is silently mislabelled.
@@ -67,6 +68,7 @@ async def devices_detail():
 
 class DeviceIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+    type: Literal["video", "picture"] = "video"
     protocol: Literal["rtsp"] = "rtsp"
     url: str = Field(min_length=8, max_length=512)        # rtsp://host:port/path (credentials optional)
     user: str = Field("", max_length=64)
@@ -97,6 +99,10 @@ async def create_device(body: DeviceIn):
     POST /device_access/device {device_id, device_name, proto, rtsp_param: {user, password, url}}.
     Like the box UI, the new camera gets the lowest device_id that isn't in use.
     """
+    if body.type != "video":
+        # Only the Video "New device" request has been captured; a Picture device's payload is unknown.
+        raise HTTPException(501, "Adding Picture devices isn't supported yet")
+
     config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
     used = {d.get("device_id") for d in config}
     if any((d.get("device_name") or "").strip().lower() == body.name.strip().lower() for d in config):

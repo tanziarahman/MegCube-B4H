@@ -30,8 +30,11 @@ export async function fetchDeviceDetails(): Promise<DeviceDetail[]> {
   }));
 }
 
+export type DeviceType = 'video' | 'picture';
+
 export interface NewDevice {
   name: string;
+  type: DeviceType;
   protocol: string;   // 'rtsp'
   url: string;        // rtsp://host:port/path
   user: string;
