@@ -4,10 +4,9 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { AlertCircle, Eye, EyeOff, X } from 'lucide-react';
 import type { DeviceDetail } from '@/lib/devices';
 
-// Which box writes are wired. Adding and deleting use the box's captured requests;
-// edit still needs its request captured, so its Save button stays disabled.
+// Which box writes are wired. Adding, editing and deleting all use the box's captured requests.
 export const CREATE_READY = true;
-export const UPDATE_READY = false;
+export const UPDATE_READY = true;
 export const DELETE_READY = true;
 const NOT_READY_NOTE = 'Saving to the box isn’t connected yet.';
 
@@ -94,7 +93,7 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
   const [protocol, setProtocol] = useState(editing ? device.protocol.toLowerCase() : '');
   const typeSupported = !type || ADDABLE_TYPES.includes(type);
   const protocolSupported = !protocol || ADDABLE_PROTOCOLS.includes(protocol);
-  const ready = editing ? UPDATE_READY : CREATE_READY && typeSupported && protocolSupported;
+  const ready = (editing ? UPDATE_READY : CREATE_READY) && typeSupported && protocolSupported;
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,13 +221,11 @@ export function DeviceFormModal({ device, onClose, onSubmit }: {
         <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
           {!ready && (
             <span className="mr-auto text-[12.5px] text-mute">
-              {editing
-                ? NOT_READY_NOTE
-                : !typeSupported
-                  ? 'Adding Picture devices isn’t connected yet.'
-                  : !protocolSupported
-                    ? 'Adding GB28181 devices isn’t connected yet.'
-                    : NOT_READY_NOTE}
+              {!typeSupported
+                ? `${editing ? 'Editing' : 'Adding'} Picture devices isn’t connected yet.`
+                : !protocolSupported
+                  ? `${editing ? 'Editing' : 'Adding'} GB28181 devices isn’t connected yet.`
+                  : NOT_READY_NOTE}
             </span>
           )}
           <button type="button" disabled={saving} onClick={onClose} className="h-9 rounded-md border border-line px-3 text-[13.5px] hover:bg-ground">

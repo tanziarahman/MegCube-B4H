@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, List, Pencil, Plus, RefreshCw, Trash2, Video, Wifi, WifiOff } from 'lucide-react';
-import { createDevice, deleteDevice, fetchDeviceDetails, type DeviceDetail, type DeviceType } from '@/lib/devices';
+import { createDevice, deleteDevice, fetchDeviceDetails, updateDevice, type DeviceDetail, type DeviceType } from '@/lib/devices';
 import { ConfirmDeleteDevice, DeviceFormModal, type DeviceFormValues } from './DeviceModals';
 
 const inputCls =
@@ -215,6 +215,15 @@ export default function DevicesTable() {
     await load();
   };
 
+  // Edit: save on the box, then reload. An empty password keeps the current one (handled by the backend).
+  const editDevice = async (v: DeviceFormValues) => {
+    if (!form || form === 'new') return;
+    const d = form;
+    await updateDevice(d.id, { name: v.name, protocol: v.protocol, url: v.url, user: v.user, password: v.password });
+    setNotice(`Saved “${v.name}” (#${d.id}).`);
+    await load();
+  };
+
   // Delete: remove on the box, then reload. Errors are shown inside the dialog.
   const removeDevice = async () => {
     if (!deleting) return;
@@ -321,7 +330,7 @@ export default function DevicesTable() {
         <p className="text-[13.5px] text-mute">Showing {visible.length} of {devices.length} cameras</p>
       )}
 
-      {form && <DeviceFormModal device={form === 'new' ? null : form} onClose={closeForm} onSubmit={form === 'new' ? addDevice : undefined} />}
+      {form && <DeviceFormModal device={form === 'new' ? null : form} onClose={closeForm} onSubmit={form === 'new' ? addDevice : editDevice} />}
       {deleting && <ConfirmDeleteDevice device={deleting} onCancel={closeDelete} onConfirm={removeDevice} />}
     </div>
   );
