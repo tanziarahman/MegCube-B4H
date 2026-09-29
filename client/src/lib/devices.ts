@@ -56,6 +56,27 @@ export async function createDevice(d: NewDevice): Promise<number> {
   return Number(body?.device_id);
 }
 
+export interface DeviceUpdate {
+  name: string;
+  protocol: string;   // 'rtsp'
+  url: string;        // rtsp://host:port/path
+  user: string;
+  password: string;   // empty = keep the current password
+}
+
+/** Change a camera's settings on the box. Throws with the backend's message on failure. */
+export async function updateDevice(deviceId: number, d: DeviceUpdate): Promise<void> {
+  const res = await fetch(`/api/devices/${deviceId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d),
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => null))?.detail;
+    throw new Error(typeof detail === 'string' ? detail : Array.isArray(detail) ? detail[0]?.msg ?? 'Invalid input' : `Could not save the device (${res.status})`);
+  }
+}
+
 /** Remove a camera from the box. Throws with the backend's message on failure. */
 export async function deleteDevice(deviceId: number): Promise<void> {
   const res = await fetch(`/api/devices/${deviceId}`, { method: 'DELETE' });

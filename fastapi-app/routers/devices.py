@@ -125,6 +125,56 @@ async def create_device(body: DeviceIn):
     return {"device_id": device_id}
 
 
+# ---------- edit a camera ----------
+
+class DeviceUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    protocol: Literal["rtsp"] = "rtsp"
+    url: str = Field(min_length=8, max_length=512)        # rtsp://host:port/path (credentials optional)
+    user: str = Field("", max_length=64)
+    password: str = Field("", max_length=128)             # empty = keep the current password
+
+
+@router.put("/api/devices/{device_id}")
+async def update_device(body: DeviceUpdate, device_id: int = Path(..., ge=1)):
+    """Change a camera's name / stream address / credentials on the box.
+
+    Same request the box's own "Update device" dialog sends (copied from its devtools payload):
+    PUT /device_access/device_config {device_id, device_name, proto, rtsp_param: {user, password, url}}.
+    The browser never sees the stored password, so an empty password means "keep the current one":
+    it is taken from the box's current config here.
+    """
+    config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
+    current = next((d for d in config if d.get("device_id") == device_id), None)
+    if current is None:
+        raise HTTPException(404, f"Device #{device_id} is not configured on the box")
+    if any(
+        d.get("device_id") != device_id
+        and (d.get("device_name") or "").strip().lower() == body.name.strip().lower()
+        for d in config
+    ):
+        raise HTTPException(409, f"A device named '{body.name}' already exists")
+
+    password = body.password
+    if not password:
+        rtsp = current.get("rtsp_param") or {}
+        password = rtsp.get("password") or ""
+        if not password:
+            try:
+                password = urlsplit(rtsp.get("url") or "").password or ""
+            except ValueError:
+                password = ""
+
+    url, user, password = _rtsp_url(body.url, body.user, password)
+    await box.call("PUT", "/device_access/device_config", {
+        "device_id": device_id,
+        "device_name": body.name.strip(),
+        "proto": body.protocol,
+        "rtsp_param": {"user": user, "password": password, "url": url},
+    })
+    return {"updated": device_id}
+
+
 # ---------- delete a camera ----------
 
 @router.delete("/api/devices/{device_id}")

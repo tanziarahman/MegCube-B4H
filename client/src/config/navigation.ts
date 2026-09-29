@@ -1,5 +1,5 @@
 import {
-  Bell, Camera, Cpu, LayoutGrid, ScanFace, Settings, TrendingUp, Users, Video, type LucideIcon,
+  Bell, CalendarClock, Camera, Cpu, LayoutGrid, ScanFace, Settings, TrendingUp, Users, Video, type LucideIcon,
 } from 'lucide-react';
 import { PATHS } from '@/lib/paths';
 
@@ -39,6 +39,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'People', path: PATHS.people, icon: Users },
       { label: 'Devices', path: PATHS.devices, icon: Cpu },
+      { label: 'Time plans', path: PATHS.timeplans, icon: CalendarClock },
       { label: 'Settings', path: PATHS.settings, icon: Settings },
     ],
   },
