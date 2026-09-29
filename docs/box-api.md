@@ -10,6 +10,8 @@ The MegCube B4H box has no public API documentation. Everything here was worked 
 | ⚠️ | Assumed or partly known: works, but the meaning of some values is a guess |
 | ❓ | Unknown: not captured yet |
 
+> Looking for how to **use** the portal? See the [User Guide](user-guide.md). This file is the developer reference.
+
 > Samples below use placeholder IPs and passwords. Never paste real camera or box passwords into this file.
 
 ---
@@ -29,6 +31,7 @@ The MegCube B4H box has no public API documentation. Everything here was worked 
 11. [Not captured yet](#11-not-captured-yet)
 12. [How to capture a new endpoint](#12-how-to-capture-a-new-endpoint)
 13. [Testing against the box](#13-testing-against-the-box)
+14. [Portal pages and the box calls behind them](#14-portal-pages-and-the-box-calls-behind-them)
 
 ---
 
@@ -555,3 +558,22 @@ def test_edit_keeps_password(client, fake_box):
 - Box quirks that are tested include session expiry (`512`) with exactly one re-login, no second login after a refused password, the `general` error on pages past the end, capture queries always including the `structure` entry (without it the box answers `1073741831`), and invalid `minor_type` values being refused before they reach the box.
 
 **Checking against the real box:** `fastapi-app/tests/live_check.py` runs about 25 **read-only** checks through the running backend (records, people, captures, devices, images, one live video frame, input validation, API key). Run it after a box firmware update to catch changes in the API described here. See the backend README for how to run it.
+
+---
+
+## 14. Portal pages and the box calls behind them
+
+What each portal page is for, which backend routes it uses, and which box endpoints those reach. For how to use each page, see the [User Guide](user-guide.md).
+
+| Portal page | What it serves | Backend route(s) | Box endpoint(s) (section) |
+|---|---|---|---|
+| **Dashboard** `/` | Today's summary: recognitions, strangers, captures, people flow, hourly activity, camera readiness, attention queue. Refreshes every 45 s. | `GET /api/dashboard/summary` | `device_config`, `device_state` (3), `task_list` (6), `get_system_time` / `get_time_info` (7.1), `alarm_history` for today and yesterday (4) |
+| **Live view** `/live` | Up to 9 live camera tiles; latest recognitions every 5 s | `GET /api/preview/cameras`, `GET /api/preview/{id}/stream`, `GET /api/recognition` | `device_config`, `device_state` (3.1–3.2), `task_list` (6), RTSP via ffmpeg (9), `alarm_history` (4.1) |
+| **Recognition** `/recognition` | Matched people and strangers by camera and time; details; delete | `GET /api/recognition`, `DELETE /api/recognition/{id}`, `GET /api/people`, `GET /api/devices`, `GET /api/image` | `alarm_history` query/delete (4.1, 4.3), `face_manager/person/query` (5.2), `device_config` (3.1), `get_image` (8) |
+| **Captures** `/captures` | Every face and body capture by type, camera, time and track | `GET /api/capture`, `GET /api/devices`, `GET /api/image` | `alarm_history` with the `structure` entry (4.2), `device_config` (3.1), `get_image` (8) |
+| **People** `/people` | Face library: list, add, edit, delete people and their groups | `GET/POST /api/personnel`, `PUT/DELETE /api/personnel/{id}`, `GET /api/personnel/groups`, `GET /api/image` | `face_manager/…` (5.1–5.6), `get_image` (8) |
+| **Devices** `/devices` | Cameras: status, add, edit, delete (RTSP video) | `GET /api/devices/detail`, `POST /api/devices`, `PUT/DELETE /api/devices/{id}` | `device_config`, `device_state`, `device` (3.1–3.5) |
+| **Time plans** `/timeplans` | Box clock; regular and festival schedules (local drafts until saved) | `GET /api/timeplans/time`, `GET /api/timeplans/regular` and `/festival`, `POST/PUT/DELETE /api/timeplans[/{id}]` | `get_system_time`, `get_time_info`, `schedule_plan` (7.1–7.5) |
+| **Alarms**, **People counting**, **Settings** | Placeholders | none | Not captured yet (11) |
+
+Top-bar items (search, the status chips and the language switch) don't call the box yet.

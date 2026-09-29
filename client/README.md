@@ -80,10 +80,10 @@ client/
 │  ├─ components/
 │  │  ├─ layout/                 # AppShell, Sidebar/, Navbar/
 │  │  ├─ common/                 # PageHeader, Placeholder
-│  │  ├─ devices/ people/ recognition/ captures/ timeplans/
+│  │  ├─ dashboard/ devices/ people/ recognition/ captures/ timeplans/
 │  │  └─ **/*.test.tsx           # component tests sit next to the component
 │  ├─ lib/                       # API clients: the ONLY place that calls fetch('/api/...')
-│  │  ├─ devices.ts personnel.ts recognition.ts captures.ts preview.ts timeplans.ts
+│  │  ├─ dashboard.ts devices.ts personnel.ts recognition.ts captures.ts preview.ts timeplans.ts
 │  │  └─ paths.ts                # every page URL in one place
 │  ├─ mocks/handlers.ts          # MSW fake backend responses for tests
 │  ├─ test/setup.ts              # Vitest setup: jest-dom matchers + MSW server
@@ -123,6 +123,7 @@ npm run test:watch     # re-run on save
 | Test file | Covers |
 |---|---|
 | `app/login/page.test.tsx` | Valid and invalid sign-in, keyboard and password-field accessibility |
+| `components/dashboard/DashboardView.test.tsx` | Summary cards, camera readiness and the attention queue render from the dashboard summary |
 | `components/devices/DevicesTable.test.tsx` | Online/offline status, filters and reset, loading skeleton, empty state, RTSP validation, Escape to close, submitting the add form |
 | `components/people/PeopleView.test.tsx` | List, profile details, loading and empty states, required name and photo on add |
 | `components/recognition/RecognitionTable.test.tsx` | Records, detail drawer, loading and empty states, delete confirmation, focus handling |
@@ -164,6 +165,8 @@ npx tsc --noEmit && npm run lint && npm test
 | Pages show "Request failed (500)" or `ECONNREFUSED` in the terminal | Backend isn't running, or `BACKEND_URL` is wrong |
 | Every page says "Missing or wrong API key" (401) | `BACKEND_API_KEY` in `.env.local` doesn't match the backend's `API_KEY`, or wasn't set before `npm run dev` started |
 | Errors mentioning "Box error" or "unreachable" | The backend can't reach or log in to the box (see the backend README) |
+| Dashboard is slow to load on a busy day | It reads up to 5,000 of today's records from the box. The page says when trend figures are based on a sample; totals stay complete. |
+| Dashboard shows "Box clock unavailable" | The box's time endpoints didn't answer; the backend's clock is used instead |
 | Live view tiles stay black | ffmpeg isn't installed on the backend machine, or `NEXT_PUBLIC_BACKEND_URL` isn't reachable from the browser |
 | "Too many live videos open" | The backend's `MAX_STREAMS` limit; close tiles or tabs |
 | A test fails with "request without a matching handler" | Add a handler for that `/api` call in `src/mocks/handlers.ts` |

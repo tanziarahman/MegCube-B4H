@@ -6,6 +6,7 @@ A web portal for the **MegCube B4H** AI analytics box. It shows live camera vide
 |---|---|---|---|
 | Frontend | [`client/`](client/README.md) | Next.js 15, React 19, TypeScript, Tailwind | [client/README.md](client/README.md) |
 | Backend | [`fastapi-app/`](fastapi-app/README.md) | Python 3.10+, FastAPI, httpx | [fastapi-app/README.md](fastapi-app/README.md) |
+| User guide | [`docs/`](docs/user-guide.md) | How to use each page | [docs/user-guide.md](docs/user-guide.md) |
 | Box API notes | [`docs/`](docs/box-api.md) | Reverse-engineered box endpoints | [docs/box-api.md](docs/box-api.md) |
 
 ## How it fits together
@@ -101,7 +102,10 @@ All settings live in git-ignored env files. **Never commit real passwords or key
 | People (face library) | `/people` | ✅ Groups; add, edit, delete people |
 | Devices | `/devices` | ✅ List with online status, add, edit, delete · ⏳ Picture / GB28181 devices |
 | Time plans | `/timeplans` | ✅ Box clock; regular and festival plans: list, add, edit, delete |
-| Dashboard, Alarms, People counting, Settings | | ⏳ Placeholder pages |
+| Dashboard | `/` | ✅ Today's recognitions, strangers, captures, people flow, camera readiness, attention queue (auto-refresh 45 s) |
+| Alarms, People counting, Settings | | ⏳ Placeholder pages |
+
+How to use each page is in the **[User Guide](docs/user-guide.md)**.
 
 A disabled button showing *"…isn't connected yet"* means that box action hasn't been implemented yet (see the `*_READY` flags in the frontend).
 
@@ -131,6 +135,7 @@ How the fakes work and how to add tests: [frontend testing](client/README.md#tes
 MegCube-B4H/
 ├─ README.md            ← you are here
 ├─ docs/
+│  ├─ user-guide.md     ← how to use each page (for operators)
 │  └─ box-api.md        ← B4H box endpoints, payloads, error codes
 ├─ client/              ← Next.js frontend       (see client/README.md)
 │  ├─ src/app, src/components, src/lib (API clients), src/middleware.ts

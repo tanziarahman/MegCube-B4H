@@ -90,6 +90,7 @@ fastapi-app/
 │  ├─ capture.py      # Face/body capture records
 │  ├─ personnel.py    # Face library: groups, add/edit/delete people
 │  ├─ timeplan.py     # Time plans: box clock, regular/festival schedule plans
+│  ├─ dashboard.py    # Dashboard: one summary of today's activity and camera health
 │  └─ common.py       # Camera names, image proxy
 └─ tests/             # pytest suite (fake box) + live_check.py (real box)
 ```
@@ -116,8 +117,23 @@ fastapi-app/
 | GET | `/api/timeplans/regular`, `/festival` | Time plans | `POST /device_rules/schedule_plan/query` (type 1 / 2) |
 | POST / PUT / DELETE | `/api/timeplans[/{plan_id}]` | Time plans | `POST` / `PUT` / `DELETE /device_rules/schedule_plan` |
 | DELETE | `/api/timeplans/stream-subscriptions` | Time plans | `DELETE /media_video/subscribe_stream`, `DELETE /device_alarm/subscribe_stream` |
-| GET | `/api/dashboard/summary` | Dashboard | device config/state, task list, box clock, recognition and capture history |
+| GET | `/api/dashboard/summary?date=YYYY-MM-DD` | Dashboard (date optional, default today in `BOX_TIMEZONE`) | `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`, `alarm_history` (today and yesterday) |
 | GET | `/api/image?uri=…` | All image thumbnails | `/device_storage/get_image` |
+
+### Dashboard summary (`routers/dashboard.py`)
+
+`GET /api/dashboard/summary` builds the whole Dashboard page from one request:
+
+| Part of the response | How it's worked out |
+|---|---|
+| `health` | Cameras online/offline and streams pulling (`device_state`), analysis tasks, and the box clock. If the clock can't be read, `clock.source` is `backend_fallback`. |
+| `activity` | Totals for the day: matched, strangers, captures (face/body). Yesterday's totals come from one extra count query each, for the "vs yesterday" figure. |
+| `insights` | From the day's records: hourly activity and peak hour, busiest camera, average match score, **low-confidence** (score < 70) and **low-liveness** (< 80) matches, top 5 people, latest 8 events. **People flow** counts tracks once per camera + track ID. |
+| `devices`, `attention` | Per-camera readiness, and warnings: camera offline (critical), stream not pulling, no analysis task, box clock unreadable |
+
+- It reads the day's records page by page (30 per box request), **up to 5,000 records** (`MAX_ANALYSIS_RECORDS`). Beyond that, `analysis_limited` is `true`: totals stay exact, but trend figures use the latest 5,000.
+- A busy day can mean many box requests, and the box handles one at a time, so this is the slowest endpoint. The frontend refreshes it every 45 seconds.
+- A bad `date` returns `422` before anything is sent to the box.
 
 Box request details are in [`../docs/box-api.md`](../docs/box-api.md). Request and response shapes for these routes are at `/docs`.
 
@@ -175,6 +191,7 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_devices.py` | Password masking, detail list, add (lowest free id, duplicate names, bad input, concurrent adds), delete |
 | `test_preview.py` | Camera list, ffmpeg start/stop, sub vs main stream, stream limit, missing ffmpeg, bad params |
 | `test_recognition.py` | Box payload, paging, validation, empty pages, 502/503/504 mapping, delete, `/api/people` paging and cache |
+| `test_dashboard.py` | Summary totals, people-flow counts, attention items (offline camera, stream not pulling), bad date refused before any box call |
 | `test_capture.py` | Target-type mapping, record flattening, missing fields, paging, errors |
 | `test_personnel.py` | Groups, list, add/edit/delete, Bangla names, photo size limit, group-binding failure |
 | `test_common.py` | Image proxy: path whitelist, content types, fallbacks, session expiry, 404s |
