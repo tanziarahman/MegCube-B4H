@@ -53,7 +53,7 @@ Set these in `client/.env.local`, then restart `npm run dev`.
 | URL | Page | Status |
 |---|---|---|
 | `/login` | Login | Demo login |
-| `/` | Dashboard | Placeholder |
+| `/` | Dashboard | Connected (today's security activity, camera health, attention queue, and 45-second refresh) |
 | `/live` | Live view | Connected (MJPEG streams, sub-stream in the grid, main stream in HD) |
 | `/alarms`, `/alarms/:id` | Alarms | Placeholder |
 | `/recognition` | Recognition records | Connected (list, filter, delete) |

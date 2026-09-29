@@ -116,6 +116,7 @@ fastapi-app/
 | GET | `/api/timeplans/regular`, `/festival` | Time plans | `POST /device_rules/schedule_plan/query` (type 1 / 2) |
 | POST / PUT / DELETE | `/api/timeplans[/{plan_id}]` | Time plans | `POST` / `PUT` / `DELETE /device_rules/schedule_plan` |
 | DELETE | `/api/timeplans/stream-subscriptions` | Time plans | `DELETE /media_video/subscribe_stream`, `DELETE /device_alarm/subscribe_stream` |
+| GET | `/api/dashboard/summary` | Dashboard | device config/state, task list, box clock, recognition and capture history |
 | GET | `/api/image?uri=…` | All image thumbnails | `/device_storage/get_image` |
 
 Box request details are in [`../docs/box-api.md`](../docs/box-api.md). Request and response shapes for these routes are at `/docs`.
