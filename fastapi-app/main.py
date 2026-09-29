@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from b4h import B4HError
 from core import box, check_access, log
-from routers import capture, common, devices, personnel, preview, recognition, timeplan
+from routers import capture, common, dashboard, devices, personnel, preview, recognition, timeplan
 
 
 @asynccontextmanager
@@ -48,5 +48,5 @@ async def root():
 
 
 # Every /api route needs the API key (when API_KEY is set in .env); see core.check_access.
-for r in (recognition, capture, common, preview, personnel, devices, timeplan):
+for r in (recognition, capture, common, preview, personnel, devices, timeplan, dashboard):
     app.include_router(r.router, dependencies=[Depends(check_access)])
