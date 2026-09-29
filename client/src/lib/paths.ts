@@ -11,5 +11,6 @@ export const PATHS = {
   counting: '/counting',
   people: '/people',
   devices: '/devices',
+  timeplans: '/timeplans',
   settings: '/settings',
 } as const;
