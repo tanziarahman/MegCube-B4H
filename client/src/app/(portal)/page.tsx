@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import PageHeader from '@/components/common/PageHeader';
-import Placeholder from '@/components/common/Placeholder';
+import DashboardView from '@/components/dashboard/DashboardView';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
 export default function Page() {
   return (
     <>
-      <PageHeader title="Dashboard" subtitle="Today at a glance" />
-      <Placeholder text="Dashboard content goes here" />
+      <PageHeader title="Dashboard" subtitle="Security operations for today" />
+      <DashboardView />
     </>
   );
 }
