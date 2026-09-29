@@ -51,10 +51,12 @@ async def image(uri: str):
     relogged = False
     for path, params in paths:
         try:
+            session = box.session_id
             content, media_type = await box.get_bytes(path, params)
             if _session_lost(content) and not relogged:
-                # Box dropped the idle session: log in again and retry this path once.
-                await box.login()
+                # Box dropped the idle session: log in again (unless another request already did)
+                # and retry this path once.
+                await box.relogin(session)
                 relogged = True
                 content, media_type = await box.get_bytes(path, params)
             if _looks_like_error(content):

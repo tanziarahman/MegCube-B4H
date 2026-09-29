@@ -1,9 +1,11 @@
 """Recognition records and the face-library person list."""
+import time
 from typing import Literal, get_args
 
 from fastapi import APIRouter, Path, Query
 
-from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, alarm_history_page, box, time_range
+from core import (BOX_MAX_PAGE_SIZE, PEOPLE_CACHE_SECONDS, RECOG_MAJOR, alarm_history_page, box,
+                  people_cache, time_range)
 
 router = APIRouter()
 
@@ -59,7 +61,12 @@ async def people():
     The frontend uses this to drop recognition records of people who have been deleted:
     the box keeps its alarm history even after a person is removed from the library.
     Pages through /face_manager/person/query in chunks the box accepts.
+    Kept for PEOPLE_CACHE_SECONDS (default 60 s) because a big library takes many box requests;
+    adding/editing/deleting a person through this backend clears the copy immediately.
     """
+    if people_cache["data"] is not None and time.monotonic() - people_cache["at"] < PEOPLE_CACHE_SECONDS:
+        return people_cache["data"]
+
     out: list[dict] = []
     offset = 0
     while True:
@@ -79,4 +86,6 @@ async def people():
         offset += len(batch)
         if not batch or offset >= int(data.get("total_count") or 0):
             break
-    return {"total_count": len(out), "person_list": out}
+    result = {"total_count": len(out), "person_list": out}
+    people_cache.update(at=time.monotonic(), data=result)
+    return result

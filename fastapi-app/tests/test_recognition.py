@@ -143,12 +143,21 @@ def test_box_error_becomes_502(client, fake_box):
     assert "not_support" in r.json()["detail"] and "1073741831" in r.json()["detail"]
 
 
-@pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ReadTimeout("slow"), httpx.ConnectTimeout("x")])
+@pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ConnectTimeout("x"), httpx.RemoteProtocolError("x")])
 def test_box_unreachable_becomes_503(client, fake_box, exc):
     fake_box.replies[HISTORY] = exc
     r = client.get("/api/recognition", params=OK)
     assert r.status_code == 503
     assert "unreachable" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("exc", [httpx.ReadTimeout("slow"), httpx.WriteTimeout("slow"), httpx.PoolTimeout("busy")])
+def test_box_too_slow_becomes_504_with_hint(client, fake_box, exc):
+    """Connected, but the box took too long (e.g. a whole year of records) -> not 'unreachable'."""
+    fake_box.replies[HISTORY] = exc
+    r = client.get("/api/recognition", params=OK)
+    assert r.status_code == 504
+    assert "shorter date range" in r.json()["detail"]
 
 
 # ---------- delete ----------
@@ -230,3 +239,43 @@ def test_people_missing_name(client, fake_box):
 def test_people_bangla_name(client, fake_box):
     fake_box.replies[PERSON_QUERY] = {"total_count": 1, "person_list": [{"person_id": 1, "person_info": {"name": "তানজিয়া"}}]}
     assert client.get("/api/people").json()["person_list"][0]["name"] == "তানজিয়া"
+
+
+# ---------- /api/people cache ----------
+
+def test_people_is_cached(client, fake_box):
+    fake_box.replies[PERSON_QUERY] = {"total_count": 1, "person_list": _people(1)}
+    client.get("/api/people")
+    client.get("/api/people")
+    assert len(fake_box.sent(*PERSON_QUERY)) == 1
+
+
+def test_people_cache_expires(client, fake_box, monkeypatch):
+    import core
+    fake_box.replies[PERSON_QUERY] = {"total_count": 1, "person_list": _people(1)}
+    client.get("/api/people")
+    core.people_cache["at"] -= core.PEOPLE_CACHE_SECONDS + 1     # pretend a minute passed
+    client.get("/api/people")
+    assert len(fake_box.sent(*PERSON_QUERY)) == 2
+
+
+@pytest.mark.parametrize("change", [
+    lambda c: c.delete("/api/personnel/p1"),
+    lambda c: c.put("/api/personnel/p1", data={"name": "X"}),
+    lambda c: c.post("/api/personnel", data={"name": "X"}, files={"photo": ("f.jpg", b"\xff\xd8x", "image/jpeg")}),
+])
+def test_people_cache_cleared_after_personnel_change(client, fake_box, change):
+    fake_box.replies[PERSON_QUERY] = {"total_count": 1, "person_list": _people(1)}
+    for m in ("POST", "PUT", "DELETE"):
+        fake_box.replies[(m, "/face_manager/person")] = None
+    client.get("/api/people")
+    assert change(client).status_code in (200, 201)
+    client.get("/api/people")
+    assert len(fake_box.sent(*PERSON_QUERY)) == 2
+
+
+def test_people_failed_read_is_not_cached(client, fake_box):
+    fake_box.replies[PERSON_QUERY] = box_error()
+    assert client.get("/api/people").status_code == 502
+    fake_box.replies[PERSON_QUERY] = {"total_count": 0, "person_list": []}
+    assert client.get("/api/people").status_code == 200

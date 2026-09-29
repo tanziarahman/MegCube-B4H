@@ -1,13 +1,17 @@
 """Face-library groups and personnel management."""
 import json
-
+import os
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
-from core import BOX_MAX_PAGE_SIZE, box
+from b4h import B4HError
+from core import BOX_MAX_PAGE_SIZE, box, invalidate_people_cache
 
 router = APIRouter()
+
+# Photos bigger than this are refused before anything is sent to the box.
+MAX_PHOTO_BYTES = int(float(os.getenv("MAX_PHOTO_MB", "5")) * 1024 * 1024)
 
 
 def _extract_image_uri(val: Any) -> str | None:
@@ -106,11 +110,13 @@ async def _read_photo(photo: UploadFile | None) -> tuple[bytes, UploadFile] | No
     """
     if photo is None or not photo.filename:
         return None
-    image = await photo.read()
-    if not image:
-        return None
     if not photo.content_type or not photo.content_type.startswith("image/"):
         raise HTTPException(415, "photo must be an image")
+    image = await photo.read(MAX_PHOTO_BYTES + 1)  # never reads more than the limit into memory
+    if len(image) > MAX_PHOTO_BYTES:
+        raise HTTPException(413, f"photo is too large (max {MAX_PHOTO_BYTES // (1024 * 1024)} MB)")
+    if not image:
+        return None
     return image, photo
 
 
@@ -158,6 +164,7 @@ async def add_personnel(
             "person_info": (None, json.dumps(payload)),
         },
     )
+    invalidate_people_cache()
     return result or {"message": "created"}
 
 
@@ -192,21 +199,29 @@ async def update_personnel(
         files["face1"] = (photo.filename or "face.jpg", image, photo.content_type)
     files["person_info"] = (None, json.dumps(payload))
     result = await box.upload("/face_manager/person", files=files, method="PUT")
+    invalidate_people_cache()
 
     # Like the box UI, an empty selection leaves the current groups untouched.
     if groups:
-        await box.call("PUT", "/face_manager/person_bind", {
-            "person_id": person_id,
-            "face_groups": [{"group_id": g} for g in groups],
-        })
+        try:
+            await box.call("PUT", "/face_manager/person_bind", {
+                "person_id": person_id,
+                "face_groups": [{"group_id": g} for g in groups],
+            })
+        except B4HError as e:
+            # The person's details are already saved on the box at this point: say so clearly.
+            raise HTTPException(502, f"Person details were saved, but changing the groups failed: "
+                                     f"{e.message} (code {e.code})")
     return result or {"message": "updated"}
 
 
 @router.delete("/api/personnel/{person_id}")
 async def delete_personnel(person_id: str):
     """Delete a person from the box face library."""
-    return await box.call("DELETE", "/face_manager/person", {
+    result = await box.call("DELETE", "/face_manager/person", {
         "force": True,
         "all": False,
         "person_id_list": [person_id],
     })
+    invalidate_people_cache()
+    return result

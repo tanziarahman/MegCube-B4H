@@ -18,6 +18,7 @@ class FakeBoxServer:
         self.logins = 0
         self.sessions_valid = True
         self.session_lost_times = 0       # answer 512 this many times
+        self.expired: set[str] = set()    # sessions the box has dropped
         self.in_flight = 0
         self.max_in_flight = 0
         self.requests: list[httpx.Request] = []
@@ -42,6 +43,9 @@ class FakeBoxServer:
         if path == "/fail":
             return httpx.Response(200, json={"code": 1073741831, "message": "not_support"})
         # any normal API call
+        cookie_session = (request.headers.get("cookie") or "").removeprefix("sessionID=")
+        if cookie_session in self.expired:
+            return httpx.Response(200, json={"code": 512, "message": "session lost"})
         if self.session_lost_times:
             self.session_lost_times -= 1
             return httpx.Response(200, json={"code": 512, "message": "session lost"})
@@ -175,3 +179,90 @@ def test_upload_retries_after_session_expired():
     server.session_lost_times = 1
     data = run(c.upload("/face_manager/person", files={"person_info": (None, "{}")}))
     assert data["cookie"] == "sessionID=S2"
+
+
+# ---------- login safety (5 wrong passwords lock the box account) ----------
+
+def login_attempts(server):
+    return len([r for r in server.requests if r.url.path == "/auth/login"])
+
+
+def test_wrong_password_with_many_requests_at_once_is_one_attempt():
+    """A page load sends ~4 requests together. With a wrong password that must be ONE failed login, not 4."""
+    server = FakeBoxServer()
+    c = make_client(server, password="wrong")
+
+    async def page_load():
+        return await asyncio.gather(*(c.call("POST", f"/q{i}", {}) for i in range(6)), return_exceptions=True)
+    results = run(page_load())
+    assert all(isinstance(r, B4HError) for r in results)
+    assert login_attempts(server) == 1
+
+
+def test_after_a_refused_login_no_more_attempts_are_made():
+    server = FakeBoxServer()
+    c = make_client(server, password="wrong")
+    for _ in range(10):                       # user keeps reloading the page
+        with pytest.raises(B4HError) as e:
+            run(c.call("POST", "/x", {}))
+    assert login_attempts(server) == 1
+    assert "fix B4H_USER / B4H_PASS" in str(e.value.message)
+
+
+def test_forced_login_is_also_blocked_after_refusal():
+    server = FakeBoxServer()
+    c = make_client(server, password="wrong")
+    with pytest.raises(B4HError):
+        run(c.login())
+    with pytest.raises(B4HError):
+        run(c.login())
+    assert login_attempts(server) == 1
+
+
+def test_network_error_during_login_does_not_block_later_logins():
+    """Box offline is not a wrong password: once it's back, login must work."""
+    server = FakeBoxServer()
+    c = make_client(server)
+    real = server.handler
+    state = {"down": True}
+
+    async def flaky(request):
+        if state["down"]:
+            raise httpx.ConnectError("No route to host")
+        return await real(request)
+    c._http = httpx.AsyncClient(base_url="https://box", transport=httpx.MockTransport(flaky))
+    with pytest.raises(httpx.TransportError):
+        run(c.call("POST", "/x", {}))
+    state["down"] = False
+    assert run(c.call("POST", "/x", {}))["cookie"] == "sessionID=S1"
+
+
+def test_many_first_requests_share_one_login():
+    server = FakeBoxServer()
+    c = make_client(server)
+
+    async def many():
+        return await asyncio.gather(*(c.call("POST", f"/q{i}", {}) for i in range(8)))
+    run(many())
+    assert server.logins == 1
+
+
+def test_session_expiry_with_many_requests_is_one_relogin():
+    server = FakeBoxServer()
+    c = make_client(server)
+    run(c.login())
+    server.expired.add("S1")                  # box dropped the session: all 4 requests below see 512
+
+    async def many():
+        return await asyncio.gather(*(c.call("POST", f"/q{i}", {}) for i in range(4)))
+    results = run(many())
+    assert server.logins == 2                 # the startup login + ONE re-login
+    assert all(r["cookie"] == "sessionID=S2" for r in results)
+
+
+def test_relogin_skipped_when_session_already_renewed():
+    server = FakeBoxServer()
+    c = make_client(server)
+    run(c.login())
+    run(c.relogin("some-old-session"))        # someone already renewed it
+    assert server.logins == 1

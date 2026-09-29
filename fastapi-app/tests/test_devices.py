@@ -187,3 +187,18 @@ def test_delete_box_refuses(client, fake_box):
     fake_box.replies[CONFIG] = DEVICE_CONFIG
     fake_box.replies[DELETE] = box_error(1073741830, "device in use")
     assert client.delete("/api/devices/1").status_code == 502
+
+
+def test_two_cameras_added_at_the_same_moment_get_different_ids(fake_box):
+    """Two admins click Add together: both must not get the same device_id."""
+    import asyncio
+    from routers.devices import DeviceIn, create_device
+    added = []
+    fake_box.replies[CONFIG] = lambda body: [{"device_id": i, "device_name": f"c{i}"} for i in [1] + added]
+    fake_box.replies[ADD] = lambda body: added.append(body["device_id"])
+
+    async def both():
+        return await asyncio.gather(create_device(DeviceIn(**{**NEW, "name": "A"})),
+                                    create_device(DeviceIn(**{**NEW, "name": "B"})))
+    results = asyncio.run(both())
+    assert sorted(r["device_id"] for r in results) == [2, 3]

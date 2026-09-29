@@ -1,4 +1,5 @@
 """Device management page: camera list with connection status, adding and deleting cameras."""
+import asyncio
 from typing import Literal
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -8,6 +9,10 @@ from pydantic import BaseModel, Field
 from core import box
 
 router = APIRouter()
+
+# Adding a camera = read the used ids, then create with a free one. Two adds at the same moment
+# could pick the same id, so adds run one at a time.
+_add_lock = asyncio.Lock()
 
 # channel_type values. The box has two device types: Video and Picture.
 # 1 = Video is confirmed from device_config; 2 = Picture is assumed (not yet seen in a response).
@@ -103,19 +108,20 @@ async def create_device(body: DeviceIn):
         # Only the Video "New device" request has been captured; a Picture device's payload is unknown.
         raise HTTPException(501, "Adding Picture devices isn't supported yet")
 
-    config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
-    used = {d.get("device_id") for d in config}
-    if any((d.get("device_name") or "").strip().lower() == body.name.strip().lower() for d in config):
-        raise HTTPException(409, f"A device named '{body.name}' already exists")
-    device_id = next(i for i in range(1, len(used) + 2) if i not in used)
-
     url, user, password = _rtsp_url(body.url, body.user, body.password)
-    await box.call("POST", "/device_access/device", {
-        "device_id": device_id,
-        "device_name": body.name.strip(),
-        "proto": body.protocol,
-        "rtsp_param": {"user": user, "password": password, "url": url},
-    })
+    async with _add_lock:
+        config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
+        used = {d.get("device_id") for d in config}
+        if any((d.get("device_name") or "").strip().lower() == body.name.strip().lower() for d in config):
+            raise HTTPException(409, f"A device named '{body.name}' already exists")
+        device_id = next(i for i in range(1, len(used) + 2) if i not in used)
+
+        await box.call("POST", "/device_access/device", {
+            "device_id": device_id,
+            "device_name": body.name.strip(),
+            "proto": body.protocol,
+            "rtsp_param": {"user": user, "password": password, "url": url},
+        })
     return {"device_id": device_id}
 
 

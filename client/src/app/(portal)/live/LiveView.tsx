@@ -15,13 +15,24 @@ const todayRange = () => {
 
 // ---------------------------------------------------------------- one video tile
 function Tile({
-  camera, selected, onSelect, onClose,
-}: { camera?: PreviewCamera; selected: boolean; onSelect: () => void; onClose: () => void }) {
+  camera, selected, single, onSelect, onClose,
+}: { camera?: PreviewCamera; selected: boolean; single: boolean; onSelect: () => void; onClose: () => void }) {
   const [retry, setRetry] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [hdChoice, setHdChoice] = useState<boolean | null>(null); // null = automatic
+  const [fullscreen, setFullscreen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setFailed(false); }, [camera?.id]);
+  useEffect(() => { setHdChoice(null); setFailed(false); }, [camera?.id]);
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === boxRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // Grid tiles use the light sub-stream; full screen and the 1-tile layout use the main stream.
+  const hd = hdChoice ?? (single || fullscreen);
+  useEffect(() => { setFailed(false); }, [hd]);
 
   return (
     <div
@@ -40,8 +51,8 @@ function Tile({
       {camera && !failed && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={retry}
-          src={streamUrl(camera.id, retry)}
+          key={`${hd}-${retry}`}
+          src={streamUrl(camera, hd, retry)}
           alt={`Live video from ${camera.name}`}
           onError={() => setFailed(true)}
           className="h-full w-full object-contain"
@@ -49,10 +60,10 @@ function Tile({
       )}
 
       {camera && failed && (
-        <div className="flex flex-col items-center gap-2 text-center text-[13px] text-[#C7D0DA]">
+        <div className="flex flex-col items-center gap-2 px-4 text-center text-[13px] text-[#C7D0DA]">
           <VideoOff size={26} />
           <b className="text-white">{camera.name} · no video</b>
-          <span>Stream unavailable. Check the camera and that ffmpeg is installed on the backend.</span>
+          <span>Stream unavailable. Check the camera, and that ffmpeg is installed on the backend.</span>
           <button
             onClick={(e) => { e.stopPropagation(); setFailed(false); setRetry((r) => r + 1); }}
             className="mt-1 flex items-center gap-1.5 rounded-md border border-white/30 px-3 py-1 text-white hover:bg-white/10"
@@ -64,8 +75,13 @@ function Tile({
 
       {camera && (
         <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-1.5 text-[12px] text-white">
-          <span><b>{camera.name}</b>{camera.task && <span className="opacity-75"> · {camera.task}</span>}</span>
-          <span className="flex gap-1">
+          <span className="truncate"><b>{camera.name}</b>{camera.task && <span className="opacity-75"> · {camera.task}</span>}</span>
+          <span className="flex shrink-0 gap-1">
+            <button aria-label={hd ? 'Switch to low resolution' : 'Switch to high resolution'} title={hd ? 'HD (main stream)' : 'SD (sub-stream)'}
+              onClick={(e) => { e.stopPropagation(); setHdChoice(!hd); }}
+              className={`rounded px-1.5 text-[11px] font-semibold hover:bg-white/20 ${hd ? 'bg-white/25' : ''}`}>{hd ? 'HD' : 'SD'}</button>
+            <button aria-label="Reconnect" title="Reconnect" onClick={(e) => { e.stopPropagation(); setFailed(false); setRetry((r) => r + 1); }}
+              className="rounded p-1 hover:bg-white/20"><RefreshCw size={14} /></button>
             <button aria-label="Full screen" onClick={(e) => { e.stopPropagation(); boxRef.current?.requestFullscreen(); }}
               className="rounded p-1 hover:bg-white/20"><Maximize2 size={14} /></button>
             <button aria-label="Close video" onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -121,9 +137,9 @@ export default function LiveView() {
   const byId = (id: number | null) => cameras.find((c) => c.id === id);
 
   return (
-    <div className="flex h-[calc(100vh-150px)] min-h-[520px] gap-4">
+    <div className="flex flex-col gap-4 xl:h-[calc(100vh-150px)] xl:min-h-[520px] xl:flex-row">
       {/* Camera list */}
-      <aside className="flex w-60 shrink-0 flex-col rounded-lg border border-line bg-white">
+      <aside className="flex max-h-64 shrink-0 flex-col rounded-lg border border-line bg-white xl:max-h-none xl:w-60">
         <h2 className="border-b border-line px-4 py-3 text-[13px] font-semibold">Cameras</h2>
         {camError && <p className="p-4 text-[13px] text-crit">{camError}</p>}
         <ul className="flex-1 overflow-y-auto p-2">
@@ -151,7 +167,7 @@ export default function LiveView() {
       </aside>
 
       {/* Video wall */}
-      <section className="flex min-w-0 flex-1 flex-col gap-3">
+      <section className="flex h-[65vh] min-h-[360px] min-w-0 flex-1 flex-col gap-3 xl:h-auto xl:min-w-[420px]">
         <div className="flex items-center gap-2">
           <span className="text-[13px] text-mute">Layout</span>
           <div className="flex overflow-hidden rounded-md border border-line bg-white">
@@ -169,6 +185,7 @@ export default function LiveView() {
               key={i}
               camera={byId(id)}
               selected={selected === i}
+              single={layout === 1}
               onSelect={() => setSelected(i)}
               onClose={() => setTiles((t) => t.map((v, j) => (j === i ? null : v)))}
             />
@@ -177,7 +194,7 @@ export default function LiveView() {
       </section>
 
       {/* Latest recognitions */}
-      <aside className="flex w-72 shrink-0 flex-col rounded-lg border border-line bg-white">
+      <aside className="flex max-h-80 shrink-0 flex-col rounded-lg border border-line bg-white xl:max-h-none xl:w-72">
         <h2 className="border-b border-line px-4 py-3 text-[13px] font-semibold">Latest recognitions</h2>
         <ul className="flex-1 space-y-2 overflow-y-auto p-3">
           {events.length === 0 && <li className="text-[13px] text-mute">No recognitions yet today.</li>}

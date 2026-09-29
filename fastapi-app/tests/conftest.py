@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from b4h import B4HError  # noqa: E402
+import core  # noqa: E402
 from core import box  # noqa: E402
 from main import app  # noqa: E402
 
@@ -37,6 +38,7 @@ class FakeBox:
         self.images: dict[str, object] = {}                # get_bytes: path -> (bytes, type) | Exception
         self.image_calls: list[tuple[str, dict | None]] = []
         self.logins = 0
+        self.session_id = "S1"
 
     def _answer(self, method, path, body):
         key = (method, path)
@@ -68,6 +70,9 @@ class FakeBox:
     async def login(self):
         self.logins += 1
 
+    async def relogin(self, stale_session):
+        self.logins += 1
+
     async def close(self):
         pass
 
@@ -79,8 +84,11 @@ class FakeBox:
 @pytest.fixture
 def fake_box(monkeypatch):
     fake = FakeBox()
-    for name in ("call", "upload", "get_bytes", "login", "close"):
+    for name in ("call", "upload", "get_bytes", "login", "relogin", "close"):
         monkeypatch.setattr(box, name, getattr(fake, name))
+    monkeypatch.setattr(box, "session_id", "S1")
+    core.invalidate_people_cache()          # every test starts with an empty /api/people cache
+    monkeypatch.setattr(core, "API_KEY", "")  # access check off, except in the tests about it
     return fake
 
 

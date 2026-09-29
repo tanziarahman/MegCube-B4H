@@ -197,3 +197,37 @@ def test_delete_never_sends_delete_all(client, fake_box):
 def test_delete_unknown_person(client, fake_box):
     fake_box.replies[PERSON_DELETE] = box_error(5, "person not exist")
     assert client.delete("/api/personnel/nope").status_code == 502
+
+
+# ---------- photo size limit ----------
+
+def test_photo_too_large_is_refused_before_the_box(client, fake_box, monkeypatch):
+    from routers import personnel
+    monkeypatch.setattr(personnel, "MAX_PHOTO_BYTES", 1000)
+    r = client.post("/api/personnel", data={"name": "A"}, files=photo(content=b"\xff\xd8" + b"x" * 2000))
+    assert r.status_code == 413 and "too large" in r.json()["detail"]
+    assert fake_box.uploads == []
+
+
+def test_photo_exactly_at_the_limit_is_accepted(client, fake_box, monkeypatch):
+    from routers import personnel
+    monkeypatch.setattr(personnel, "MAX_PHOTO_BYTES", 1000)
+    fake_box.replies[PERSON_POST] = None
+    r = client.post("/api/personnel", data={"name": "A"}, files=photo(content=b"x" * 1000))
+    assert r.status_code == 201
+    assert len(fake_box.uploads[0][2]["face1"][1]) == 1000
+
+
+def test_edit_photo_too_large(client, fake_box, monkeypatch):
+    from routers import personnel
+    monkeypatch.setattr(personnel, "MAX_PHOTO_BYTES", 10)
+    assert client.put("/api/personnel/p1", data={"name": "A"}, files=photo()).status_code == 413
+    assert fake_box.uploads == []
+
+
+def test_edit_group_failure_says_details_were_saved(client, fake_box):
+    fake_box.replies[PERSON_PUT] = None
+    fake_box.replies[BIND] = box_error(4, "group not found")
+    r = client.put("/api/personnel/p1", data={"name": "A", "group_ids": '["gone"]'})
+    assert r.status_code == 502
+    assert "details were saved" in r.json()["detail"] and "group not found" in r.json()["detail"]

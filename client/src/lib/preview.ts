@@ -5,6 +5,7 @@ export interface PreviewCamera {
   name: string;
   online: boolean;
   task: string | null;   // analysis task on this camera, if any
+  stream_token: string | null; // signed "exp=..&sig=.." that lets the <img> open the video (API key can't be sent by an <img>)
 }
 
 // Video goes straight to the backend (not through the Next.js /api proxy) so frames aren't buffered.
@@ -16,7 +17,9 @@ export async function fetchPreviewCameras(): Promise<PreviewCamera[]> {
   return res.json();
 }
 
-/** `retry` changes the URL so the browser opens a fresh stream. */
-export function streamUrl(cameraId: number, retry = 0, width = 960): string {
-  return `${BACKEND}/api/preview/${cameraId}/stream?width=${width}&r=${retry}`;
+/** hd = main stream (full resolution), otherwise the light sub-stream. `retry` forces a fresh stream. */
+export function streamUrl(camera: PreviewCamera, hd = false, retry = 0): string {
+  const width = hd ? 1920 : 640;
+  const token = camera.stream_token ? `&${camera.stream_token}` : '';
+  return `${BACKEND}/api/preview/${camera.id}/stream?hd=${hd}&width=${width}&r=${retry}${token}`;
 }
