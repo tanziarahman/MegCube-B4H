@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 
-from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, box, to_ms
+from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, alarm_history_page, time_range
 
 router = APIRouter()
 
@@ -81,12 +81,13 @@ async def capture(
     unconfirmed whether the box accepts a device_id filter in
     query_condition, so the frontend joins device_id -> device_name via /api/devices.
     """
-    data = await box.call("POST", "/device_alarm/alarm_history", {
+    start_ms, end_ms = time_range(start, end)
+    data = await alarm_history_page({
         "offset": (page - 1) * size,
         "size": size,
         "query_condition": {
-            "start_time": str(to_ms(start)),
-            "end_time": str(to_ms(end)),
+            "start_time": start_ms,
+            "end_time": end_ms,
             "alarm_type": [
                 {"major_type": RECOG_MAJOR, "minor_type": _CAPTURE_MINORS[target_type]},
                 _STRUCTURE_ALARM_TYPE,
@@ -96,5 +97,5 @@ async def capture(
     return {
         "total_count": data.get("total_count", 0),
         "return_count": data.get("return_count", 0),
-        "list": [_normalize_capture(a) for a in data.get("list", [])],
+        "list": [_normalize_capture(a) for a in data.get("list") or []],
     }

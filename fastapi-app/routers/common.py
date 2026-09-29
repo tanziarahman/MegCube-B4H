@@ -15,7 +15,12 @@ _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 _SESSION_LOST = 512
 
 
-# ... @router.get("/api/devices") unchanged ...
+@router.get("/api/devices")
+async def devices():
+    """Camera id + name, used by the Recognition/Capture pages to show camera names.
+    (Only id and name: the box's device_config also holds the RTSP passwords.)"""
+    config = await box.call("POST", "/device_access/device_config", {"offset": 0, "size": 100}) or []
+    return [{"device_id": d.get("device_id"), "device_name": d.get("device_name")} for d in config]
 
 
 def _looks_like_error(content: bytes) -> bool:

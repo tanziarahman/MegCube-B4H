@@ -3,7 +3,7 @@ from typing import Literal, get_args
 
 from fastapi import APIRouter, Path, Query
 
-from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, box, to_ms
+from core import BOX_MAX_PAGE_SIZE, RECOG_MAJOR, alarm_history_page, box, time_range
 
 router = APIRouter()
 
@@ -20,12 +20,13 @@ async def recognition(
     size: int = Query(10, ge=1, le=BOX_MAX_PAGE_SIZE),
 ):
     """One page of recognition records, as the box returns them (the frontend maps the fields)."""
-    return await box.call("POST", "/device_alarm/alarm_history", {
+    start_ms, end_ms = time_range(start, end)
+    return await alarm_history_page({
         "offset": (page - 1) * size,
         "size": size,
         "query_condition": {
-            "start_time": str(to_ms(start)),
-            "end_time": str(to_ms(end)),
+            "start_time": start_ms,
+            "end_time": end_ms,
             "alarm_type": [{"major_type": RECOG_MAJOR, "minor_type": [minor]}],
             # Sent by the box's own Records page (copied from its devtools payload). Without it the
             # box may return a trimmed record; with de_dup 0 every record comes back, un-merged.
