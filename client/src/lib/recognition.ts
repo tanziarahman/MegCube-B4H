@@ -285,18 +285,22 @@ const MAX_RECORDS = 5000;
  * - Both modes: deleted people are also dropped from each row's "Other results".
  * If the person library can't be loaded, the box's data is shown unfiltered.
  */
-export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
-  let exists: ((id: string, name: string) => boolean) | null = null;
+/** Checks whether a person is still in the face library, or null if the library couldn't be loaded. */
+async function libraryCheck(): Promise<((id: string, name: string) => boolean) | null> {
   try {
     const people = await fetchPeople();
     const ids = new Set(people.map((p) => p.id).filter(Boolean));
     const names = new Set(people.map((p) => norm(p.name)).filter(Boolean));
     // Still in the library if either the id or the name matches. Records and the person list
     // don't always carry ids from the same place, so id alone can wrongly look "deleted".
-    exists = (id, name) => (!!id && ids.has(id)) || names.has(norm(name));
+    return (id, name) => (!!id && ids.has(id)) || names.has(norm(name));
   } catch {
-    exists = null;
+    return null;
   }
+}
+
+export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: RecognitionRow[]; total: number }> {
+  const exists = await libraryCheck();
 
   const prune = (r: RecognitionRow): RecognitionRow =>
     exists ? { ...r, otherResults: r.otherResults.filter((c) => exists!(c.personId, c.name)) } : r;
@@ -320,6 +324,17 @@ export async function fetchRecognition(q: RecognitionQuery): Promise<{ rows: Rec
   const kept = all.filter((r) => exists!(r.personId, r.name)).map(prune);
   const from = (q.page - 1) * q.size;
   return { rows: kept.slice(from, from + q.size), total: kept.length };
+}
+
+/**
+ * The first `q.size` matched records of the range, from ONE box request (for the Live view panel,
+ * which polls every few seconds). Deleted people are dropped, so it can return fewer rows;
+ * unlike fetchRecognition it never pages through the whole range.
+ */
+export async function fetchLatestRecognitions(q: Omit<RecognitionQuery, 'page' | 'minor'>): Promise<RecognitionRow[]> {
+  const exists = await libraryCheck();
+  const { rows } = await fetchRecognitionPage({ ...q, page: 1, minor: MATCHED });
+  return exists ? rows.filter((r) => exists(r.personId, r.name)) : rows;
 }
 
 /** Permanently delete one recognition record on the box. Throws with the backend's message on failure. */

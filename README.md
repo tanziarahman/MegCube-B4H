@@ -1,37 +1,36 @@
 # MegCube B4H Portal
 
-A web portal for the **MegCube B4H** AI analytics box. It shows live camera video, face recognition and capture records, the face library, camera management and time plans in one browser app, and runs on your own PC next to the box.
-
-| Part | Folder | Tech | Details |
-|---|---|---|---|
-| Frontend | [`client/`](client/README.md) | Next.js 15, React 19, TypeScript, Tailwind | [client/README.md](client/README.md) |
-| Backend | [`fastapi-app/`](fastapi-app/README.md) | Python 3.10+, FastAPI, httpx | [fastapi-app/README.md](fastapi-app/README.md) |
-| User guide | [`docs/`](docs/user-guide.md) | How to use each page | [docs/user-guide.md](docs/user-guide.md) |
-| Box API notes | [`docs/`](docs/box-api.md) | Reverse-engineered box endpoints | [docs/box-api.md](docs/box-api.md) |
-
-## How it fits together
+A web portal for the **MegCube B4H** AI analytics box. It brings live camera video, face recognition and capture records, the face library, camera management and time plans together in one browser app, and runs on a PC on the same network as the box.
 
 ```
 Browser ──▶ Next.js frontend ──▶ FastAPI backend ──▶ B4H box
             localhost:3000       localhost:8000      HTTPS on the LAN
-            (/api/* rewrite,     (login, session,
-             adds API key)        masks passwords)
 ```
 
-- The **browser only talks to Next.js**. Requests to `/api/*` are forwarded to the backend, so there is no CORS setup. The Next.js server adds the backend's **API key** on the way, so the browser never sees it.
-- The **backend is the only thing that talks to the box**. It handles the box's challenge–response login, re-logs in when the session expires, stops trying after a refused password (so the box account can't get locked), and never sends camera passwords to the browser.
-- **Live video**: the box's own player needs a Windows plugin, so the backend uses ffmpeg to turn each camera's RTSP stream into MJPEG that a plain `<img>` can show. Those `<img>` URLs carry a short-lived signed token instead of the API key.
+## Documentation
+
+| Document | For |
+|---|---|
+| **[User Guide](docs/user-guide.md)** | How to use every page: step-by-step tasks, messages, FAQ |
+| **[Architecture](docs/architecture.md)** | How the parts fit together, security model, known issues |
+| **[Backend API reference](docs/backend-api.md)** | Every `/api/*` route: parameters, responses, errors, box calls behind it |
+| **[Box API reference](docs/box-api.md)** | Every B4H box endpoint the backend calls, and what the box returns |
+| [Contributions and challenges](docs/contributions.md) | Who built what, and the problems we solved |
+| [client/README.md](client/README.md) | Frontend development and tests |
+| [fastapi-app/README.md](fastapi-app/README.md) | Backend development, configuration and tests |
+
+All of it is indexed in [docs/README.md](docs/README.md).
 
 ## Requirements
 
 - **Node.js** 18.18+ (20 LTS recommended)
 - **Python** 3.10+ and [**uv**](https://docs.astral.sh/uv/) (or pip)
-- **ffmpeg** on the backend machine, for Live view only (Windows: `winget install ffmpeg`)
+- **ffmpeg** on the backend machine, for Live view only (Windows: `winget install ffmpeg`, then open a new terminal)
 - The PC must be on the **same network as the box** and able to open its web UI (e.g. `https://192.168.90.200`)
 
 ## Quick start
 
-Open two terminals from the project root.
+Open two terminals in the project root.
 
 **1. Backend**
 
@@ -50,7 +49,7 @@ API_KEY=a-long-random-string
 ```
 
 ```bash
-uv run uvicorn main:app --reload        # http://localhost:8000  (API docs at /docs)
+uv run uvicorn main:app --reload        # http://localhost:8000  (interactive API docs at /docs)
 ```
 
 **2. Frontend**
@@ -61,7 +60,7 @@ npm install
 cp .env.example .env.local              # Windows PowerShell: copy .env.example .env.local
 ```
 
-Add the same key to `client/.env.local`:
+Set the same key in `client/.env.local`:
 
 ```env
 BACKEND_URL=http://localhost:8000
@@ -72,42 +71,43 @@ BACKEND_API_KEY=a-long-random-string    # must equal API_KEY in fastapi-app/.env
 npm run dev                             # http://localhost:3000
 ```
 
-Open **http://localhost:3000** and log in with any username and password `admin` (demo login).
+**3. Open http://localhost:3000** and sign in with any username and the password `admin` (demo sign-in).
 
 > Generate a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Without `API_KEY` the backend still works, but its API is open to anyone on the network, and it logs a warning.
 
+> ⚠️ The sign-in is a demo and does not protect pages. Run the portal only on a trusted network. See [Architecture → Security model](docs/architecture.md#4-security-model).
+
 ## Configuration
 
-All settings live in git-ignored env files. **Never commit real passwords or keys.** The main ones are below. See each part's README for the full list.
+Settings live in git-ignored env files. **Never commit real passwords or keys.**
 
 | File | Variable | Default | Purpose |
 |---|---|---|---|
 | `fastapi-app/.env` | `B4H_BASE_URL` | `https://192.168.90.200` | Box address |
-| | `B4H_USER` / `B4H_PASS` | `admin` / (set it) | Box login |
+| | `B4H_USER` / `B4H_PASS` | `admin` / (empty) | Box login |
 | | `API_KEY` | (empty = API open) | Key every `/api` request must carry |
-| | `BOX_TIMEZONE` | `Asia/Dhaka` | Time zone for date filters |
+| | `BOX_TIMEZONE` | `Asia/Dhaka` | Time zone of the box; used for all date filters |
+| | `B4H_TIMEOUT` | `15` | Seconds to wait for the box before answering `504` |
 | | `FFMPEG_PATH` / `MAX_STREAMS` | `ffmpeg` / `16` | Live view: ffmpeg location, most videos at once |
-| | `B4H_TIMEOUT`, `RECOG_MAJOR`, `PEOPLE_CACHE_SECONDS`, `MAX_PHOTO_MB` | | See [backend README](fastapi-app/README.md#environment-variables) |
+| | `RECOG_MAJOR`, `PEOPLE_CACHE_SECONDS`, `MAX_PHOTO_MB` | | See [backend README](fastapi-app/README.md#environment-variables) |
 | `client/.env.local` | `BACKEND_URL` | `http://localhost:8000` | Where the Next.js server forwards `/api/*` |
 | | `BACKEND_API_KEY` | (none) | Same value as the backend's `API_KEY` |
-| | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` | Backend address as the browser sees it (live video) |
+| | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` | Backend address **as the browser sees it** (live video). Change it when users open the portal from another PC. |
 
 ## Features and status
 
 | Area | Page | Status |
 |---|---|---|
-| Live view | `/live` | ✅ Live MJPEG video per camera; light sub-stream in the grid, HD main stream on demand |
-| Recognition | `/recognition` | ✅ List, filter, delete records |
-| Captures | `/captures` | ✅ Face and body capture records |
-| People (face library) | `/people` | ✅ Groups; add, edit, delete people |
-| Devices | `/devices` | ✅ List with online status, add, edit, delete · ⏳ Picture / GB28181 devices |
-| Time plans | `/timeplans` | ✅ Box clock; regular and festival plans: list, add, edit, delete |
 | Dashboard | `/` | ✅ Today's recognitions, strangers, captures, people flow, camera readiness, attention queue (auto-refresh 45 s) |
+| Live view | `/live` | ✅ Up to 9 live cameras; SD in the grid, HD on demand; latest recognitions |
+| Recognition | `/recognition` | ✅ Search matched/strangers, details, delete |
+| Captures | `/captures` | ✅ Face and body captures, grid/list, details |
+| People (face library) | `/people` | ✅ Add, edit, delete people; groups |
+| Devices | `/devices` | ✅ RTSP video cameras: status, add, edit, delete · ⏳ Picture / GB28181 devices |
+| Time plans | `/timeplans` | ✅ Regular and festival plans: create, edit, delete; box clock |
 | Alarms, People counting, Settings | | ⏳ Placeholder pages |
 
-How to use each page is in the **[User Guide](docs/user-guide.md)**.
-
-A disabled button showing *"…isn't connected yet"* means that box action hasn't been implemented yet (see the `*_READY` flags in the frontend).
+Known bugs and limitations are listed in [Architecture → Known issues](docs/architecture.md#9-known-issues-and-limitations).
 
 ## Testing
 
@@ -115,57 +115,55 @@ A disabled button showing *"…isn't connected yet"* means that box action hasn'
 
 | What | Where | Command | Needs |
 |---|---|---|---|
-| Backend unit/API tests (~310) | `fastapi-app/tests/` | `cd fastapi-app && uv run pytest` | Nothing; a `FakeBox` stands in for the box |
+| Backend unit/API tests | `fastapi-app/tests/` | `cd fastapi-app && uv run pytest` | Nothing; a `FakeBox` stands in for the box |
 | Frontend unit/component tests | `client/src/**/*.test.tsx` | `cd client && npm test` | Nothing; MSW fakes the backend |
-| Frontend end-to-end tests | `client/e2e/` | `cd client && npm run test:e2e` | Browsers, via `npx playwright install` the first time |
-| Live check (read-only) | `fastapi-app/tests/live_check.py` | `uv run python tests/live_check.py` | Running backend **and the real box** |
+| Frontend end-to-end tests | `client/e2e/` | `cd client && npm run test:e2e` | Browsers (`npx playwright install` the first time) |
+| Live check (read-only) | `fastapi-app/tests/live_check.py` | `uv run python tests/live_check.py` | A running backend **and the real box** |
 
-Before pushing, run:
+Before pushing:
 
 ```bash
 cd fastapi-app && uv run pytest
 cd ../client && npx tsc --noEmit && npm run lint && npm test
 ```
 
-How the fakes work and how to add tests: [frontend testing](client/README.md#testing) · [backend testing](fastapi-app/README.md#testing).
-
 ## Repository layout
 
 ```
 MegCube-B4H/
-├─ README.md            ← you are here
-├─ docs/
-│  ├─ user-guide.md     ← how to use each page (for operators)
-│  └─ box-api.md        ← B4H box endpoints, payloads, error codes
-├─ client/              ← Next.js frontend       (see client/README.md)
-│  ├─ src/app, src/components, src/lib (API clients), src/middleware.ts
-│  ├─ src/mocks, src/test ← MSW handlers + Vitest setup
-│  └─ e2e/              ← Playwright tests
-└─ fastapi-app/         ← FastAPI backend         (see fastapi-app/README.md)
-   ├─ main.py, core.py, b4h.py (box client)
-   ├─ routers/          ← devices, preview, recognition, capture, personnel, timeplan, common
-   └─ tests/            ← pytest suite + live_check.py
+├─ README.md               ← you are here
+├─ docs/                   ← user guide, architecture, API references (see docs/README.md)
+├─ client/                 ← Next.js frontend  (client/README.md)
+│  ├─ src/app/             ← pages (folder name = URL)
+│  ├─ src/components/      ← page bodies
+│  ├─ src/lib/             ← API clients: the only code that calls /api
+│  ├─ src/mocks, src/test/ ← MSW fake backend + Vitest setup
+│  └─ e2e/                 ← Playwright tests
+└─ fastapi-app/            ← FastAPI backend  (fastapi-app/README.md)
+   ├─ main.py, core.py, b4h.py
+   ├─ routers/             ← one file per feature area
+   └─ tests/               ← pytest suite + live_check.py
 ```
 
 ## Adding a feature from the box
 
 The box's API isn't publicly documented; endpoints are found from its own web UI.
 
-1. Open the box's web UI, then **DevTools → Network** with "Preserve log" on.
-2. Perform the action there (e.g. edit a camera) and copy the request's **method, URL, payload and response** into [`docs/box-api.md`](docs/box-api.md).
-3. **Backend**: add a route in the matching `fastapi-app/routers/*.py` that calls `box.call(...)` with that payload, plus pytest tests using `fake_box`.
-4. **Frontend**: add a function in `client/src/lib/*.ts`, an MSW handler in `src/mocks/handlers.ts`, use it in the component, and flip any `*_READY` flag.
+1. **Capture** the box request in DevTools and add it to [docs/box-api.md](docs/box-api.md#13-how-to-capture-a-new-endpoint).
+2. **Backend:** add a route in `fastapi-app/routers/*.py` that calls `box.call(...)`, with pytest tests using `fake_box`. Document it in [docs/backend-api.md](docs/backend-api.md).
+3. **Frontend:** add a function in `client/src/lib/*.ts` and an MSW handler in `src/mocks/handlers.ts`, then use it in the component.
+4. **User Guide:** describe the new page or button in [docs/user-guide.md](docs/user-guide.md).
 
 ## Troubleshooting
 
 | Symptom | Where to look |
 |---|---|
-| Frontend pages show load errors / `ECONNREFUSED` | Backend isn't running, or `BACKEND_URL` is wrong |
-| `401 Missing or wrong API key` | `BACKEND_API_KEY` (client) ≠ `API_KEY` (backend), or the frontend wasn't restarted |
+| Pages show load errors / `ECONNREFUSED` in the frontend terminal | The backend isn't running, or `BACKEND_URL` is wrong |
+| `401 Missing or wrong API key` | `BACKEND_API_KEY` (client) ≠ `API_KEY` (backend), or the frontend wasn't restarted after the change |
 | `503 B4H box unreachable` | This PC can't reach the box (network, VPN, box rebooting) |
 | `504 The box took too long` | Shorten the date range, or raise `B4H_TIMEOUT` |
-| `B4H login refused` / `Box error on /auth/login` | Wrong `B4H_USER` / `B4H_PASS`. Fix `.env` and restart the backend. **5 wrong attempts lock the box account**, so the backend stops trying after one refusal. |
+| `B4H login refused` / `Login to the box is paused` | Wrong `B4H_USER` / `B4H_PASS`. Fix `.env` and **restart** the backend. **5 wrong attempts lock the box account**, so the backend stops trying after one refusal. |
 | Live view black / `ffmpeg not found` | Install ffmpeg, restart the backend from a new terminal, or set `FFMPEG_PATH` |
-| `(b4h-portal-api)` in the terminal prompt | The backend's Python virtual environment; `deactivate` exits it |
+| Live view works on the server PC but not on others | Set `NEXT_PUBLIC_BACKEND_URL` to an address other PCs can reach, and rebuild/restart the frontend |
 
-More detail in [client/README.md](client/README.md) and [fastapi-app/README.md](fastapi-app/README.md).
+More in [client/README.md](client/README.md#troubleshooting) and [fastapi-app/README.md](fastapi-app/README.md#troubleshooting).

@@ -46,9 +46,11 @@ Set these in `client/.env.local`, then restart `npm run dev`.
 | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` | Backend address **as seen from the browser**, used for live video `<img>` URLs, which bypass the proxy so frames aren't buffered. |
 | `BACKEND_API_KEY` | (none) | Must equal the backend's `API_KEY`. `src/middleware.ts` adds it as `X-API-Key` to every `/api` request on the Next.js server, so browsers never see it. |
 
-> `.env.example` currently only lists `BACKEND_URL`. Add the other two when you use an API key or run the backend on another host or port.
+> `.env.example` lists all three; the last two are commented out. `NEXT_PUBLIC_*` values are built into the browser code, so restart `npm run dev` (or rebuild) after changing them.
 
 ## Pages
+
+How each page is used is in the [User Guide](../docs/user-guide.md).
 
 | URL | Page | Status |
 |---|---|---|
@@ -97,7 +99,7 @@ client/
 
 ## Conventions
 
-- **API calls live in `src/lib/*.ts`.** Components import functions such as `fetchDeviceDetails()` and never call `fetch` themselves. Each client maps the backend's snake_case fields to camelCase types and throws an `Error` carrying the backend's `detail` message.
+- **API calls live in `src/lib/*.ts`.** Components import functions such as `fetchDeviceDetails()` and never call `fetch` themselves. Each client maps the backend's snake_case fields to camelCase types and throws an `Error` carrying the backend's `detail` message. Which function calls which route: [Backend API → Frontend client map](../docs/backend-api.md#14-frontend-client-map); request and response shapes are in the same document.
 - **URLs come from `lib/paths.ts`.** Don't type page paths as strings.
 - **Feature flags for unfinished box writes.** Flags like `CREATE_READY` / `UPDATE_READY` / `DELETE_READY` in `components/devices/DeviceModals.tsx` keep a button disabled, with a "not connected yet" note, until the box request behind it exists in the backend. All three are `true` now. Picture and GB28181 devices are still blocked in the form.
 - **Client vs server components.** Pages stay server components. Anything with state, effects or browser APIs starts with `'use client'`.
@@ -125,6 +127,7 @@ npm run test:watch     # re-run on save
 | `app/login/page.test.tsx` | Valid and invalid sign-in, keyboard and password-field accessibility |
 | `components/dashboard/DashboardView.test.tsx` | Summary cards, camera readiness and the attention queue render from the dashboard summary |
 | `components/devices/DevicesTable.test.tsx` | Online/offline status, filters and reset, loading skeleton, empty state, RTSP validation, Escape to close, submitting the add form |
+| `components/captures/CapturesView.test.tsx` | Captures render with camera names; Refresh reloads from the backend |
 | `components/people/PeopleView.test.tsx` | List, profile details, loading and empty states, required name and photo on add |
 | `components/recognition/RecognitionTable.test.tsx` | Records, detail drawer, loading and empty states, delete confirmation, focus handling |
 
@@ -166,7 +169,7 @@ npx tsc --noEmit && npm run lint && npm test
 | Every page says "Missing or wrong API key" (401) | `BACKEND_API_KEY` in `.env.local` doesn't match the backend's `API_KEY`, or wasn't set before `npm run dev` started |
 | Errors mentioning "Box error" or "unreachable" | The backend can't reach or log in to the box (see the backend README) |
 | Dashboard is slow to load on a busy day | It reads up to 5,000 of today's records from the box. The page says when trend figures are based on a sample; totals stay complete. |
-| Dashboard shows "Box clock unavailable" | The box's time endpoints didn't answer; the backend's clock is used instead |
+| Dashboard shows "Box clock unavailable" | The box's time endpoints didn't answer (some firmware lacks them); the figures are still correct |
 | Live view tiles stay black | ffmpeg isn't installed on the backend machine, or `NEXT_PUBLIC_BACKEND_URL` isn't reachable from the browser |
 | "Too many live videos open" | The backend's `MAX_STREAMS` limit; close tiles or tabs |
 | A test fails with "request without a matching handler" | Add a handler for that `/api` call in `src/mocks/handlers.ts` |

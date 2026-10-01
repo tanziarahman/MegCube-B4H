@@ -89,11 +89,15 @@ export default function TimeplansView() {
     setPlans((current) => [...current, next]);
     setSelectedId(next.id);
     setSearch('');
-    setNotice('Draft created. It will stay in this browser until the box write API is connected.');
+    setNotice('Draft created. It stays in this browser until you click Save draft.');
   };
 
   const removePlan = async () => {
-    if (!selected || !window.confirm(`Delete “${selected.name}” from the box? This cannot be undone.`)) return;
+    if (!selected) return;
+    const question = selected.local
+      ? `Discard the local draft “${selected.name}”?`
+      : `Delete “${selected.name}” from the box? This cannot be undone.`;
+    if (!window.confirm(question)) return;
     setSaving(true);
     setError(null);
     try {
@@ -193,7 +197,7 @@ export default function TimeplansView() {
             <div className="flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8F9DB0]">Box clock</span><Clock3 size={16} className="text-[#9BB8F8]" /></div>
             <p className="mt-4 font-mono text-[24px] tracking-tight">{context?.time?.slice(11) ?? '--:--:--'}</p>
             <p className="mt-1 text-[12px] text-[#AAB6C5]">{context?.time?.slice(0, 10) ?? 'Waiting for time'} · {context?.zone ?? 'Unknown zone'}</p>
-            <div className="mt-4 border-t border-white/10 pt-3 text-[11.5px] text-[#AAB6C5]">{context ? 'Clock is synchronized with the recorder.' : 'Reading the recorder clock...'}</div>
+            <div className="mt-4 border-t border-white/10 pt-3 text-[11.5px] text-[#AAB6C5]">{!context ? 'Reading the recorder clock...' : context.source === 'box' ? 'Clock is read from the recorder.' : 'Recorder clock unavailable; showing the portal server’s clock.'}</div>
           </section>
           <section className="rounded-lg border border-line bg-white p-4">
             <div className="flex items-center gap-2 text-[13px] font-semibold"><CalendarClock size={16} className="text-pri" /> Plan summary</div>

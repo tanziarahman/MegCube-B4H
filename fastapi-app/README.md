@@ -74,7 +74,8 @@ Generate an API key with `python -c "import secrets; print(secrets.token_urlsafe
 - With `API_KEY` set, all `/api/*` routes need `X-API-Key: <API_KEY>`. The key is checked in `core.check_access`, wired to every router in `main.py`. A missing or wrong key returns `401`. The key is **not** accepted as a URL parameter.
 - The Next.js server adds the header (`client/src/middleware.ts` with `BACKEND_API_KEY`), so the browser never sees the key.
 - **Live video** is loaded by an `<img>` tag, which can't send headers. `/api/preview/cameras` therefore returns a `stream_token` for each camera (`exp=…&sig=…`, an HMAC of camera id and expiry, valid for 12 hours). It only opens **that camera's** stream, and stops working if `API_KEY` changes.
-- `GET /` stays open as a health check.
+- `GET /` stays open as a health check. FastAPI's own `/docs` and `/openapi.json` are also open (they aren't under `/api`).
+- The portal's sign-in page is a demo and doesn't protect anything; see [Architecture → Security model](../docs/architecture.md#4-security-model).
 
 ## Project structure
 
@@ -97,73 +98,32 @@ fastapi-app/
 
 ## API endpoints
 
-| Method | Path | Used by | Box endpoint(s) |
-|---|---|---|---|
-| GET | `/api/devices/detail` | Devices | `POST /device_access/device_config` + `POST /device_access/device_state` |
-| POST | `/api/devices` | Devices: add | `POST /device_access/device` |
-| PUT | `/api/devices/{id}` | Devices: edit (empty password keeps the current one) | `PUT /device_access/device_config` |
-| DELETE | `/api/devices/{id}` | Devices: delete | `DELETE /device_access/device` |
-| GET | `/api/devices` | Camera names on Recognition/Captures | `POST /device_access/device_config` (id + name only) |
-| GET | `/api/preview/cameras` | Live view | `device_config`, `device_state`, `intelli_manager/task_list` |
-| GET | `/api/preview/{id}/stream` | Live view (`<img src>`); `?hd=true` main stream, otherwise sub-stream | RTSP via ffmpeg |
-| GET | `/api/recognition` | Recognition | `POST /device_alarm/alarm_history` |
-| DELETE | `/api/recognition/{alarm_id}` | Recognition | `DELETE /device_alarm/alarm_history` |
-| GET | `/api/people` | Recognition filters (cached) | `POST /face_manager/person/query` (all pages) |
-| GET | `/api/capture` | Captures | `POST /device_alarm/alarm_history` |
-| GET | `/api/personnel/groups` | People | `POST /face_manager/groups/query` |
-| GET / POST | `/api/personnel` | People | `POST /face_manager/person/query`, upload to `/face_manager/person` |
-| PUT / DELETE | `/api/personnel/{id}` | People | `PUT /face_manager/person` (upload) + `PUT /face_manager/person_bind`, `DELETE /face_manager/person` |
-| GET | `/api/timeplans/time` | Time plans | `POST /system/get_system_time`, `POST /system/get_time_info` |
-| GET | `/api/timeplans/regular`, `/festival` | Time plans | `POST /device_rules/schedule_plan/query` (type 1 / 2) |
-| POST / PUT / DELETE | `/api/timeplans[/{plan_id}]` | Time plans | `POST` / `PUT` / `DELETE /device_rules/schedule_plan` |
-| DELETE | `/api/timeplans/stream-subscriptions` | Time plans | `DELETE /media_video/subscribe_stream`, `DELETE /device_alarm/subscribe_stream` |
-| GET | `/api/dashboard/summary?date=YYYY-MM-DD` | Dashboard (date optional, default today in `BOX_TIMEZONE`) | `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`, `alarm_history` (today and yesterday) |
-| GET | `/api/image?uri=…` | All image thumbnails | `/device_storage/get_image` |
+The full reference (parameters, response shapes, errors, and the box calls behind each route) is in **[docs/backend-api.md](../docs/backend-api.md)**. Swagger UI is at `http://localhost:8000/docs` while the server runs.
 
-### Dashboard summary (`routers/dashboard.py`)
-
-`GET /api/dashboard/summary` builds the whole Dashboard page from one request:
-
-| Part of the response | How it's worked out |
+| Router | Routes |
 |---|---|
-| `health` | Cameras online/offline and streams pulling (`device_state`), analysis tasks, and the box clock. If the clock can't be read, `clock.source` is `backend_fallback`. |
-| `activity` | Totals for the day: matched, strangers, captures (face/body). Yesterday's totals come from one extra count query each, for the "vs yesterday" figure. |
-| `insights` | From the day's records: hourly activity and peak hour, busiest camera, average match score, **low-confidence** (score < 70) and **low-liveness** (< 80) matches, top 5 people, latest 8 events. **People flow** counts tracks once per camera + track ID. |
-| `devices`, `attention` | Per-camera readiness, and warnings: camera offline (critical), stream not pulling, no analysis task, box clock unreadable |
+| `dashboard.py` | `GET /api/dashboard/summary` |
+| `devices.py` | `GET /api/devices/detail`, `POST /api/devices`, `PUT /api/devices/{id}`, `DELETE /api/devices/{id}` |
+| `common.py` | `GET /api/devices` (id + name), `GET /api/image` |
+| `preview.py` | `GET /api/preview/cameras`, `GET /api/preview/{id}/stream` |
+| `recognition.py` | `GET /api/recognition`, `DELETE /api/recognition/{alarm_id}`, `GET /api/people` |
+| `capture.py` | `GET /api/capture` |
+| `personnel.py` | `GET /api/personnel/groups`, `GET/POST /api/personnel`, `PUT/DELETE /api/personnel/{id}` |
+| `timeplan.py` | `GET /api/timeplans/time`, `GET /api/timeplans/regular`, `GET /api/timeplans/festival`, `POST /api/timeplans`, `PUT/DELETE /api/timeplans/{plan_id}`, `DELETE /api/timeplans/stream-subscriptions` |
 
-- It reads the day's records page by page (30 per box request), **up to 5,000 records** (`MAX_ANALYSIS_RECORDS`). Beyond that, `analysis_limited` is `true`: totals stay exact, but trend figures use the latest 5,000.
-- A busy day can mean many box requests, and the box handles one at a time, so this is the slowest endpoint. The frontend refreshes it every 45 seconds.
-- A bad `date` returns `422` before anything is sent to the box.
-
-Box request details are in [`../docs/box-api.md`](../docs/box-api.md). Request and response shapes for these routes are at `/docs`.
+The box endpoints these call are in [docs/box-api.md](../docs/box-api.md).
 
 ## How the box connection works (`b4h.py`)
 
-**Login** is a challenge–response exchange:
-1. `GET /auth/login/challenge?username=…` returns `session_id`, `salt` and `challenge`.
-2. `POST /auth/login` with `password = sha256(password + salt + challenge)`.
-3. Every request after that sends `Cookie: sessionID=<session_id>`.
+All box traffic goes through one `B4HClient`. In short:
 
-Box quirks the client handles:
+- **Login** is challenge–response (`GET /auth/login/challenge`, then `POST /auth/login` with `sha256(password + salt + challenge)`); the session travels as `Cookie: sessionID=…`.
+- **Expired session** (code `512`, after ~30 s idle): log in again and retry **once**; simultaneous requests share one re-login.
+- **One call at a time**: the box can't handle parallel queries, so calls are serialised with a lock.
+- **Lockout protection**: after the box refuses the credentials, no further login is attempted until restart.
+- `box.call(method, path, body)` returns the box's `data` or raises `B4HError`; `box.upload(...)` sends multipart; `box.get_bytes(...)` downloads images.
 
-- **Idle sessions expire after about 30 s** (code `512`). The client logs in again and retries **once**. Many requests hitting an expired session together share **one** re-login.
-- **One query at a time per session.** Parallel calls fail with code `1073741825`, so calls are serialised with a lock.
-- **5 wrong passwords in a row lock the box account.** Only one login runs at a time, and after the box refuses the credentials no more attempts are made until restart.
-- **At most 30 records per page** for record queries (`BOX_MAX_PAGE_SIZE`). Asking for a page past the end gives an empty page, not the box's `general` error.
-- **Self-signed HTTPS certificate**, so TLS verification is off for the box connection only.
-- **Times are in the box's time zone** (`BOX_TIMEZONE`), whatever the server's own time zone is.
-
-**Error mapping:**
-
-| Situation | HTTP status to frontend |
-|---|---|
-| Missing or wrong API key | `401` |
-| Bad input from the frontend (bad date, unknown type, page size > 30, start after end) | `422`. Refused before anything reaches the box. |
-| Unknown id / duplicate name | `404` / `409` |
-| Face photo too large | `413` |
-| Box returned a non-zero `code` | `502` with `detail: "Box error on <path>: <message> (code N)"` |
-| Box unreachable, or too many live videos open | `503` |
-| Box connected but too slow (e.g. a long date range) | `504` with a hint to shorten the range |
+`main.py` maps errors to HTTP statuses: `B4HError` → `502`, box unreachable → `503`, box too slow → `504`. Routes raise `401`, `404`, `409`, `413`, `415`, `422` and `501` themselves. Details: [Architecture §5](../docs/architecture.md#5-talking-to-the-box) and [Backend API §13](../docs/backend-api.md#13-errors).
 
 ## Testing
 
@@ -195,8 +155,9 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_capture.py` | Target-type mapping, record flattening, missing fields, paging, errors |
 | `test_personnel.py` | Groups, list, add/edit/delete, Bangla names, photo size limit, group-binding failure |
 | `test_common.py` | Image proxy: path whitelist, content types, fallbacks, session expiry, 404s |
+| `test_timeplan.py` | Box clock and its fallback, plan list/create/update/delete payloads, id mismatch refused, stream-subscription route not shadowed by `{plan_id}` |
 
-**Not covered yet:** `PUT /api/devices/{id}` (device edit) and all of `routers/timeplan.py` have no tests. Add them next.
+**Not covered yet:** `PUT /api/devices/{id}` (device edit) has no tests. Add them next.
 
 **Adding a test:** use the `client` and `fake_box` fixtures, set the replies your route needs, call the route, then assert on the response **and** on `fake_box.calls`.
 
@@ -215,11 +176,12 @@ It reads `API_KEY` from `.env`. Run it after box firmware changes, or before a r
 ## Adding an endpoint for a new box feature
 
 1. Use the feature in the box's own web UI with DevTools → Network open ("Preserve log" on).
-2. Copy the request method, path, payload and response, and add them to `../docs/box-api.md`.
+2. Copy the request method, path, payload and response, and add them to [`../docs/box-api.md`](../docs/box-api.md).
 3. Add a route in the matching `routers/*.py` that calls `box.call(METHOD, "/box/path", payload)`. `call()` returns `data` or raises `B4HError`. New router files must be added to the list in `main.py` so they get the API-key check.
 4. Validate input with a Pydantic model, and never return passwords (see `_mask_url` in `devices.py`).
 5. Add tests with `fake_box` that assert the exact payload sent to the box.
-6. Add a client function in `client/src/lib/`, an MSW handler, and flip the frontend's `*_READY` flag if there is one.
+6. Document the route in [`../docs/backend-api.md`](../docs/backend-api.md): parameters, response example, errors, box calls.
+7. Add a client function in `client/src/lib/`, an MSW handler, and flip the frontend's `*_READY` flag if there is one.
 
 ## Troubleshooting
 
@@ -231,7 +193,7 @@ It reads `API_KEY` from `.env`. Run it after box firmware changes, or before a r
 | `401 Missing or wrong API key` | The two keys don't match, or the frontend wasn't restarted after setting it |
 | `503 B4H box unreachable` | This PC can't reach the box IP (network, VPN, or box rebooting) |
 | `504 The box took too long` | Shorten the date range, or raise `B4H_TIMEOUT` |
-| `Time zone '…' not found` | Windows: `uv add tzdata` |
+| `Time zone '…' not found` | Windows needs the `tzdata` package: run `uv sync` (it's a dependency), or `pip install tzdata` |
 | `ffmpeg not found` | Install ffmpeg and restart the backend from a **new** terminal, or set `FFMPEG_PATH` |
 | `Too many live videos open` | Close tiles or tabs, or raise `MAX_STREAMS` |
-| `(b4h-portal-api)` appears in the terminal | That's the project's virtual environment. Leave it active to run the backend; `deactivate` exits it. |
+| A `(…)` prefix appears in the terminal prompt | That's the project's Python virtual environment. Leave it active to run the backend; `deactivate` exits it. |

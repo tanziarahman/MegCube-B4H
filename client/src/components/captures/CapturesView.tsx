@@ -38,6 +38,7 @@ export default function CapturesView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<CaptureRow | null>(null);
+  const [reloadKey, setReloadKey] = useState(0); // bumped by Refresh to re-run the query
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +63,7 @@ export default function CapturesView() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, targetType, page, size]);
+  }, [dateFrom, dateTo, targetType, page, size, reloadKey]);
 
   // Device + track-id filtering happen client-side on the current page only:
   // the box's alarm_history endpoint doesn't support a device filter, and a
@@ -106,7 +107,7 @@ export default function CapturesView() {
         view={view}
         onView={setView}
         onReset={resetFilters}
-        onRefresh={() => (setPage(1), setDateFrom((d) => d))}
+        onRefresh={() => setReloadKey((k) => k + 1)}
         loading={loading}
       />
 

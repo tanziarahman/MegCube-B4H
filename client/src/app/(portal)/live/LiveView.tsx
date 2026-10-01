@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Maximize2, RefreshCw, VideoOff, X } from 'lucide-react';
 import { fetchPreviewCameras, streamUrl, type PreviewCamera } from '@/lib/preview';
-import { fetchRecognition, type RecognitionRow } from '@/lib/recognition';
+import { fetchLatestRecognitions, type RecognitionRow } from '@/lib/recognition';
 
 const LAYOUTS = [1, 4, 9] as const;
 type Layout = (typeof LAYOUTS)[number];
@@ -113,10 +113,10 @@ export default function LiveView() {
       .catch((e) => setCamError(e instanceof Error ? e.message : 'Could not load cameras'));
   }, []);
 
-  // Latest recognitions, refreshed every 5 s.
+  // Latest recognitions, refreshed every 5 s (one box request per refresh).
   useEffect(() => {
-    const load = () => fetchRecognition({ ...todayRange(), page: 1, size: 8, minor: 'face_comparison_successful' })
-      .then((r) => setEvents(r.rows)).catch(() => {});
+    const load = () => fetchLatestRecognitions({ ...todayRange(), size: 8 })
+      .then(setEvents).catch(() => {});
     load();
     const t = setInterval(load, 5000);
     return () => clearInterval(t);

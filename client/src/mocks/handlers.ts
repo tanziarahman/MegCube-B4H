@@ -55,6 +55,23 @@ export const sampleRecognition = {
   ],
 };
 
+export const sampleCaptures = {
+  total_count: 1,
+  return_count: 1,
+  list: [
+    {
+      alarm_id: 2201,
+      track_id: '5610081',
+      target_type: 'face',
+      device_id: 1,
+      capture_time_ms: '1760000000000',
+      target_image: null,
+      panoramic_image: null,
+      attributes: { age: 31 },
+    },
+  ],
+};
+
 export const sampleDashboard = {
   date: '2026-09-29',
   generated_at: '2026-09-29T14:30:00',
@@ -117,6 +134,7 @@ export const handlers = [
   http.get('/api/people', () => HttpResponse.json({ total_count: 1, person_list: [{ person_id: 'p-1', name: 'Ada Lovelace' }] })),
   http.get('/api/devices', () => HttpResponse.json([{ id: 1, name: 'Entrance camera' }])),
   http.get('/api/recognition', () => HttpResponse.json(sampleRecognition)),
+  http.get('/api/capture', () => HttpResponse.json(sampleCaptures)),
   http.delete('/api/recognition/:alarmId', ({ params }) => HttpResponse.json({ deleted: Number(params.alarmId) })),
 ];
 

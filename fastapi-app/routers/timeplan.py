@@ -103,15 +103,8 @@ async def update_timeplan(body: SchedulePlanIn, plan_id: str = Path(..., min_len
     return {"schedule_plan_id": plan_id, "data": result or {}}
 
 
-@router.delete("/api/timeplans/{plan_id}")
-async def delete_timeplan(body: SchedulePlanDeleteIn, plan_id: str = Path(..., min_length=1)):
-    """Delete an existing schedule plan using the box UI's DELETE payload."""
-    if body.schedule_plan_id != plan_id:
-        raise HTTPException(422, "plan_id must match schedule_plan_id")
-    result = await box.call("DELETE", "/device_rules/schedule_plan", body.model_dump())
-    return {"deleted": plan_id, "data": result or {}}
-
-
+# Declared before DELETE /api/timeplans/{plan_id}: FastAPI matches routes in order, so otherwise
+# "stream-subscriptions" would be taken as a plan id.
 @router.delete("/api/timeplans/stream-subscriptions")
 async def unsubscribe_streams(body: StreamHandlesIn):
     """Stop media-video and device-alarm stream subscriptions used by the view."""
@@ -126,3 +119,12 @@ async def unsubscribe_streams(body: StreamHandlesIn):
         "media_video_handles": body.handles,
         "device_alarm_handles": body.device_alarm_handles,
     }
+
+
+@router.delete("/api/timeplans/{plan_id}")
+async def delete_timeplan(body: SchedulePlanDeleteIn, plan_id: str = Path(..., min_length=1)):
+    """Delete an existing schedule plan using the box UI's DELETE payload."""
+    if body.schedule_plan_id != plan_id:
+        raise HTTPException(422, "plan_id must match schedule_plan_id")
+    result = await box.call("DELETE", "/device_rules/schedule_plan", body.model_dump())
+    return {"deleted": plan_id, "data": result or {}}

@@ -11,6 +11,7 @@ export interface PersonnelRecord {
     name?: string;
     code?: string;
     birthday?: string;
+    gender?: number;   // box code; the form has no field for it, so edits send it back unchanged
     remarks?: string;
   };
 }
