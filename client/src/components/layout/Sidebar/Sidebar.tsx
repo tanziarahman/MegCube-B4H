@@ -1,6 +1,7 @@
 'use client';
 
 import { NAV_SECTIONS } from '@/config/navigation';
+import { useOpenAlarmCount } from '@/hooks/useOpenAlarmCount';
 import SidebarBrand from './SidebarBrand';
 import SidebarSection from './SidebarSection';
 
@@ -9,8 +10,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed }: SidebarProps) {
-  // Replace with real data later (e.g. from a useAlarmSummary() hook).
-  const badges = { newAlarms: 12 };
+  const badges = { newAlarms: useOpenAlarmCount() };
 
   return (
     <nav

@@ -25,6 +25,7 @@ The backend also generates interactive docs at **`http://localhost:8000/docs`** 
 12. [Images](#12-images)
 13. [Errors](#13-errors)
 14. [Frontend client map](#14-frontend-client-map)
+15. [Alarms](#15-alarms)
 
 ---
 
@@ -91,6 +92,14 @@ curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/devices/detail"
 | DELETE | [`/api/timeplans/{plan_id}`](#115-delete-apitimeplansplan_id) | Delete a plan | Time plans |
 | DELETE | [`/api/timeplans/stream-subscriptions`](#116-delete-apitimeplansstream-subscriptions) | Close box stream subscriptions | — (not used yet) |
 | GET | [`/api/image`](#121-get-apiimage) | Proxy a record or face-library image | All pages with pictures |
+| GET | [`/api/alarms/status`](#151-get-apialarmsstatus) | Alarm workers, email setup, open-alarm count | Alarms, sidebar badge |
+| GET | [`/api/alarms/cameras`](#152-get-apialarmscameras) | Cameras rules can watch | Alarms |
+| GET/POST/PUT/DELETE | [`/api/alarms/contacts[/{id}]`](#153-recipients) | Email recipients | Alarms |
+| POST | [`/api/alarms/test-email`](#153-recipients) | Send a test email | Alarms |
+| GET/POST/PUT/PATCH/DELETE | [`/api/alarms/rules[/{id}]`](#154-rules) | Alarm rules | Alarms |
+| GET | [`/api/alarms/incidents`](#155-get-apialarmsincidents) | Alarms that fired | Alarms |
+| GET | [`/api/alarms/incidents/{ref}`](#156-get-apialarmsincidentsref) | One alarm with detections and emails | Alarm detail |
+| PATCH | [`/api/alarms/incidents/{id}`](#157-patch-apialarmsincidentsid) | Acknowledge, resolve, note | Alarms, Alarm detail |
 
 ---
 
@@ -788,7 +797,7 @@ For request-validation errors, FastAPI returns `detail` as a **list**:
 | `500` | Backend fault | `ffmpeg not found (…)` or `Internal Server Error` | Check the backend log |
 | `501` | Not implemented | `Adding Picture devices isn't supported yet` | Use the box UI |
 | `502` | The box refused | `Box error on <path>: <message> (code N)` · `No video from camera N: …` | See [Box error codes](box-api.md#10-error-codes) |
-| `503` | Box unreachable / too many streams | `B4H box unreachable (ConnectError)` · `Too many live videos open (16)…` | Check the network; close video tiles |
+| `503` | Box or database unreachable / no database / too many streams | `B4H box unreachable (ConnectError)` · `Too many live videos open (16)…` | Check the network; close video tiles |
 | `504` | Box too slow | `The box took too long to answer. Try a shorter date range, or try again.` | Shorten the range or raise `B4H_TIMEOUT` |
 
 If the box refused the login, every call fails with `502` and a message saying login is paused: fix `B4H_USER` / `B4H_PASS` and **restart** the backend.
@@ -824,4 +833,147 @@ Which frontend function calls which route (`client/src/lib/`):
 | | `createTimePlan(plan)` | `POST /api/timeplans` |
 | | `updateTimePlan(plan)` | `PUT /api/timeplans/{id}` |
 | | `deleteTimePlan(plan)` | `DELETE /api/timeplans/{id}` |
+| `alarms.ts` | `fetchAlarmStatus()` | `GET /api/alarms/status` (also the sidebar badge, every 60 s) |
+| | `fetchAlarmCameras()` | `GET /api/alarms/cameras` |
+| | `fetchContacts()`, `saveContact(c)`, `deleteContact(id)`, `sendTestEmail(to)` | `/api/alarms/contacts`, `/api/alarms/test-email` |
+| | `fetchRules()`, `createRule(r)`, `updateRule(id, version, r)`, `setRuleEnabled(id, on)`, `deleteRule(id)` | `/api/alarms/rules` |
+| | `fetchIncidents(f)`, `fetchIncident(ref)`, `updateIncident(id, change)` | `/api/alarms/incidents` |
 | (all with images) | `imageUrl(uri)` helpers | `GET /api/image?uri=…` |
+
+---
+
+## 15. Alarms
+
+Rules, recipients and incidents live in the portal's **own database** (`DATABASE_URL`, PostgreSQL on Neon), not on the box. A background worker reads the box's recognition and capture records every few seconds and checks them against the rules; see [backend README → Database and alarms](../fastapi-app/README.md#database-and-alarms).
+
+Without `DATABASE_URL`, every route below answers `503 The database isn't configured…`, except `GET /api/alarms/status` (which reports `database: false`).
+
+Ids: `camera_ids` are the portal's camera ids from 15.2 (not the box `device_id`). Times in responses are ISO 8601 with time zone (UTC).
+
+### 15.1 `GET /api/alarms/status`
+
+Health of the alarm feature, and the open-alarm count for the sidebar badge.
+
+```json
+{
+  "database": true,
+  "workers": { "ingest": { "running": true, "last_ok": "2026-09-28T17:05:00+00:00", "last_error": null },
+               "mailer": { "running": true, "last_ok": "…", "last_error": null } },
+  "smtp": { "configured": true, "host": "smtp.gmail.com", "sender": "alarms@example.org" },
+  "timezone": "Asia/Dhaka",
+  "max_recipients": 5,
+  "ingest": [ { "stream": "recognition", "read_until": "…", "last_success_at": "…", "consecutive_failures": 0,
+                "last_error": null, "events_ingested": 1520 } ],
+  "open_incidents": 3,
+  "notifications": { "pending": 0, "failed": 1 }
+}
+```
+
+### 15.2 `GET /api/alarms/cameras`
+
+Cameras a rule can watch: the box's device list, copied into the database first (if the box is unreachable, the last copy is returned). Cameras removed from the box stay, with `deleted: true`.
+
+```json
+[ { "id": 2, "device_id": 2, "name": "IPCAM-D3", "deleted": false } ]
+```
+
+### 15.3 Recipients
+
+| Method | Path | Body / result |
+|---|---|---|
+| GET | `/api/alarms/contacts` | `[ { "id", "name", "email", "is_active", "rule_count" } ]` |
+| POST | `/api/alarms/contacts` | `{ "name", "email", "is_active": true }` → `201` the recipient. The email is stored lower-case; a duplicate → `409` |
+| PUT | `/api/alarms/contacts/{id}` | same body → the recipient |
+| DELETE | `/api/alarms/contacts/{id}` | removes them from every rule → `{ "deleted": id }` |
+| POST | `/api/alarms/test-email` | `{ "to": "you@example.org" }` → `{ "sent_to" }`. Sends immediately. `409` if SMTP isn't set up, `502` with the SMTP server's message if it refuses |
+
+`is_active: false` pauses a recipient: rules keep them, but no emails are queued for them.
+
+### 15.4 Rules
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/alarms/rules` | All rules (with cameras, windows, targets, recipients, `last_fired_at`) |
+| POST | `/api/alarms/rules` | Create → `201` |
+| GET | `/api/alarms/rules/{id}` | One rule |
+| PUT | `/api/alarms/rules/{id}` | Replace (body + `version`) |
+| PATCH | `/api/alarms/rules/{id}/enabled` | `{ "is_enabled": false }` |
+| DELETE | `/api/alarms/rules/{id}` | Delete; its past alarms are kept (`rule_id` becomes `null`, `rule_name` stays) |
+
+**Body** (POST; PUT adds `"version"`):
+
+```json
+{
+  "name": "Night watch D3",
+  "description": null,
+  "is_enabled": true,
+  "severity": "critical",
+  "event_kinds": ["stranger", "matched"],
+  "match_mode": "anyone",
+  "min_match_score": null,
+  "min_liveness": null,
+  "timezone": "Asia/Dhaka",
+  "cooldown_seconds": 300,
+  "dedupe_scope": "camera",
+  "max_delay_seconds": 300,
+  "email_delayed": false,
+  "attach_snapshot": true,
+  "camera_ids": [2],
+  "windows": [ { "iso_dow": 1, "start": "22:00", "end": "06:00" } ],
+  "targets": [ { "type": "group", "value": "1", "label": "Staff" } ],
+  "recipient_ids": [1, 4]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `event_kinds` | Which detections count: `stranger`, `matched` (recognised person), `face_capture`, `body_capture` |
+| `match_mode` | `anyone`; `strangers` (needs `stranger`); `known` = anyone in the face library (needs `matched`); `targets` = only the people/groups in `targets` (needs `matched`) |
+| `targets` | `type` `person` (box `person_id`) or `group` (box `group_id`); `label` is the name, also used to match records that only carry group names |
+| `min_match_score` | Recognised people need at least this similarity (0–100). Not applied to strangers |
+| `min_liveness` | Ignore detections below this liveness (0–100). Records without a liveness score pass |
+| `windows` | When the rule is active, per weekday (`iso_dow` 1 = Monday), box time zone (`timezone`). `end` before `start` runs past midnight and belongs to the day it starts. **No windows = always active** |
+| `cooldown_seconds` | Quiet period: after an alarm, more detections on that camera join it (`event_count`) instead of raising new alarms and emails |
+| `dedupe_scope` | `camera`: one alarm per camera per quiet period. `track`: one alarm per person track (each person walking by) |
+| `max_delay_seconds` / `email_delayed` | A detection that reaches the portal later than this is saved as a **delayed** alarm, and only emailed with `email_delayed: true` |
+| `recipient_ids` | Up to `ALARM_MAX_RECIPIENTS` (5) |
+
+**Errors:** `422` for inconsistent rules (e.g. `strangers` without the `stranger` kind, `targets` without targets, a window starting and ending at the same time, more than 5 recipients, an unknown or removed camera); `409` for a duplicate name, or a `version` that isn't the current one (someone else saved first: reload and edit again).
+
+### 15.5 `GET /api/alarms/incidents`
+
+Alarms, newest first.
+
+| Param | Default | Notes |
+|---|---|---|
+| `status` | all | Repeatable: `open`, `acknowledged`, `resolved`, `false_alarm` |
+| `rule_id`, `camera_id` | | |
+| `start`, `end` | | `YYYY-MM-DD HH:mm:ss` in the box's time zone |
+| `page` / `size` | `1` / `20` | `size` ≤ 100 |
+
+```json
+{
+  "total": 1, "page": 1, "size": 20,
+  "items": [ {
+    "id": 41, "public_id": "0b5c6c1e-…", "rule_id": 7, "rule_name": "Night watch D3", "severity": "critical",
+    "camera_id": 2, "camera_name": "IPCAM-D3", "track_id": 5727190, "person_uuid": null, "person_name": null,
+    "is_stranger": true, "occurred_at": "…", "detected_at": "…", "delay_seconds": 4, "is_delayed": false,
+    "event_count": 3, "last_event_at": "…", "status": "open", "acknowledged_by": null, "acknowledged_at": null,
+    "note": null, "snapshot_path": "./record_CHN0/…/face.jpg"
+  } ]
+}
+```
+
+`snapshot_path` is a box image path: show it through [`GET /api/image`](#121-get-apiimage).
+
+### 15.6 `GET /api/alarms/incidents/{ref}`
+
+`ref` is the alarm `id`, or its `public_id` (used in email links). Returns the item above plus `rule_snapshot` (the rule as it was when it fired), `events` (up to 50 detections: `kind`, `occurred_at`, track ids, person, scores, image paths) and `notifications` (`to_address`, `status` `pending|sending|sent|failed`, `attempts`, `last_error`, `sent_at`). `404` if unknown.
+
+### 15.7 `PATCH /api/alarms/incidents/{id}`
+
+```json
+{ "status": "acknowledged", "note": "Checked the camera", "by": "Nishat" }
+```
+
+All fields optional. Moving away from `open` records `acknowledged_at` and `acknowledged_by` (`by`, or `portal`); back to `open` clears them. Every change is written to the audit log.

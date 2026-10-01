@@ -20,11 +20,12 @@ This guide explains how to use the B4H Portal day to day: what each page is for,
 9. [People](#9-people): the face library
 10. [Devices](#10-devices): cameras
 11. [Time plans](#11-time-plans): schedules
-12. [Pages not available yet](#12-pages-not-available-yet)
-13. [Step-by-step: common tasks](#13-step-by-step-common-tasks)
-14. [Messages and what to do](#14-messages-and-what-to-do)
-15. [Frequently asked questions](#15-frequently-asked-questions)
-16. [Glossary](#16-glossary)
+12. [Alarms](#12-alarms): get emailed when someone is where they shouldn't be
+13. [Pages not available yet](#13-pages-not-available-yet)
+14. [Step-by-step: common tasks](#14-step-by-step-common-tasks)
+15. [Messages and what to do](#15-messages-and-what-to-do)
+16. [Frequently asked questions](#16-frequently-asked-questions)
+17. [Glossary](#17-glossary)
 
 ---
 
@@ -127,7 +128,7 @@ The page you're on is highlighted. To make more room, click the **collapse butto
 | **EN \| 中** | Language choice. Pages are in English for now. |
 | **Admin** | Sign out |
 
-The red number next to **Alarms** in the sidebar is also a placeholder.
+The red number next to **Alarms** in the sidebar is the number of **open alarms** (updated every minute).
 
 ### Things that work the same everywhere
 
@@ -499,19 +500,91 @@ The weekly timeline shows each day from **Monday to Sunday** as a bar from 00:00
 
 ---
 
-## 12. Pages not available yet
+## 12. Alarms
+
+**What it's for:** getting an **email** when the cameras see someone where or when they shouldn't, for example *anyone on camera D3 after 10 pm*. You write the rules; the portal checks every detection from the box against them, a few seconds after it happens.
+
+> Alarms need the portal's database. If the page says *Alarms need the portal database*, ask your administrator to set it up (see the [backend README](../fastapi-app/README.md#database-and-alarms)).
+
+The page has three tabs: **Alarms** (what happened), **Rules** (what to watch for) and **Recipients** (who gets emailed).
+
+### Warnings at the top
+
+| Warning | Meaning |
+|---|---|
+| *The portal can't read new detections from the box right now* | The box is unreachable. Alarms resume, and catch up, when it's back. |
+| *Email isn't set up* | Alarms are still recorded, but nobody is emailed until the administrator sets up email. |
+| *… alarm emails could not be delivered* | An email server problem. Open an alarm to see the error. |
+
+### Alarms tab
+
+Shows **open** alarms first (change **Status** to see the others). Filter by **Rule**, **Camera** and dates. The list refreshes itself every 30 seconds.
+
+| Column | Meaning |
+|---|---|
+| **Snapshot** | The face (or body) the box captured |
+| **Time** | When the person was seen. *Reported N min late* means the portal was offline and caught up later. |
+| **Rule** | Which rule raised it, and its severity (**Info**, **Warning**, **Critical**) |
+| **Who** | The person's name if recognised, otherwise **Stranger** |
+| **Status** | **Open**, **Acknowledged**, **Resolved** or **False alarm** |
+
+If the same rule sees more people on that camera during its *quiet period*, they're added to the open alarm (*3 detections*) instead of sending more emails.
+
+Click **Acknowledge** to show you've seen it, or **Details** to open the alarm.
+
+### Alarm details
+
+- **Snapshot** and the full camera view. Images come from the box and disappear when it overwrites old records.
+- **Detections**: every detection grouped into this alarm.
+- **Emails**: who was emailed and whether it was **Sent**, **Waiting to send** or **Failed** (with the reason).
+- **Handle it**: type **your name** (remembered on this computer) and an optional **note**, then click **Acknowledge**, **Resolve**, **False alarm** or **Reopen**. **Save note** saves just the note.
+
+The link in an alarm email opens this page.
+
+### Create a rule
+
+1. Open the **Rules** tab and click **+ New rule**.
+2. Give it a **name** (e.g. *After hours on D3*) and a **severity**.
+3. Tick the **cameras** to watch.
+4. Choose **Who triggers it**:
+   - **Anyone**: any recognised person or stranger. Tick **Body capture** too to catch people whose face isn't visible.
+   - **Strangers only**: faces not in the face library.
+   - **Anyone in the face library**: recognised people only.
+   - **Specific people or groups**: tick the people and/or groups.
+5. Under **When it's active**, choose **Always**, or **Set times**: pick the days and the hours. A window that ends earlier than it starts (e.g. **22:00 to 06:00**) runs **past midnight** into the next morning. Times are the box's time.
+6. **Quiet period**: after an alarm, the rule waits this many minutes before emailing again for that camera (default 5).
+7. Tick up to **5 recipients** (add them first on the **Recipients** tab).
+8. Click **Create rule**.
+
+Use the **On** switch on a rule to pause it without deleting it. **Edit** changes it; **🗑** deletes it (its past alarms are kept).
+
+> If someone else saved the same rule while you were editing, you'll see *Someone else changed this rule…*: close the form, and edit again.
+
+### Recipients tab
+
+- **+ Add recipient**: name and email address. Untick *Receives alarm emails* to pause someone without taking them off rules.
+- **Send a test email**: type an address and click **Send test** to check emails arrive (look in spam too). The button is disabled until email is set up.
+
+### Good to know
+
+- Alarms work from the box's **face recognition and capture records**, so a person the box doesn't detect can't raise an alarm. Good camera angles and lighting matter.
+- An alarm usually arrives **within about 10 seconds** of the detection.
+- Each recipient gets their own email, with the snapshot attached.
+
+---
+
+## 13. Pages not available yet
 
 These pages are in the sidebar but show a placeholder for now:
 
 | Page | Planned purpose |
 |---|---|
-| **Alarms** | A list of alarms raised by the box's rules |
 | **People counting** | Counts of people entering and leaving over time |
 | **Settings** | Portal and box settings |
 
 ---
 
-## 13. Step-by-step: common tasks
+## 14. Step-by-step: common tasks
 
 ### Daily check (2 minutes)
 
@@ -556,9 +629,17 @@ These pages are in the sidebar but show a placeholder for now:
 3. Click **+** on Monday to Friday. Each gets a 09:00–17:00 window.
 4. Click **Save draft**.
 
+### Get an email when anyone is on camera D3 at night
+
+1. **Alarms** → **Recipients** → **+ Add recipient** for each person to notify (up to 5). Send a test email.
+2. **Rules** → **+ New rule**. Name it *Night watch D3*, severity **Critical**.
+3. Tick **IPCAM-D3**. **Who triggers it**: *Anyone*; also tick **Body capture**.
+4. **Set times**: all 7 days, **22:00** to **06:00**.
+5. Tick the recipients and click **Create rule**.
+
 ---
 
-## 14. Messages and what to do
+## 15. Messages and what to do
 
 | Message | What it means | What to do |
 |---|---|---|
@@ -578,10 +659,14 @@ These pages are in the sidebar but show a placeholder for now:
 | *No records for these filters.* / *No captures match these filters.* | Nothing matched | Widen the date range or clear filters |
 | *Box clock unavailable* / *Portal clock* | The box's clock couldn't be read | Times still work. Tell your administrator if it persists. |
 | *Page not found* | The address doesn't exist | Click **Back to Dashboard** |
+| *Alarms need the portal database* | Alarms aren't set up on the server | Ask your administrator |
+| *Email isn't set up…* | Alarms are recorded but not emailed | Ask your administrator to set up email |
+| *Someone else changed this rule while you were editing it* | Two people edited the same rule | Close the form, then edit again |
+| *A rule named '…' already exists* / *A recipient with the email … already exists* | Names and emails must be unique | Use another name, or edit the existing one |
 
 ---
 
-## 15. Frequently asked questions
+## 16. Frequently asked questions
 
 **Why does someone I deleted from People still show up in old records?**
 The box keeps old records after a person is deleted. The portal hides them on the Recognition page; you might still see them on the Captures page, which shows every capture.
@@ -606,7 +691,7 @@ Camera passwords are never shown in the portal. The sign-in is currently a demon
 
 ---
 
-## 16. Glossary
+## 17. Glossary
 
 | Term | Meaning |
 |---|---|

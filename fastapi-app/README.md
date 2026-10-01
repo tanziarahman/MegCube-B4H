@@ -51,6 +51,15 @@ B4H_PASS=your-box-password
 API_KEY=a-long-random-string        # same value as BACKEND_API_KEY in client/.env.local
 BOX_TIMEZONE=Asia/Dhaka
 # FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe
+
+# Alarms (optional; see "Database and alarms" below)
+# DATABASE_URL=postgresql://user:password@ep-xxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+# DATABASE_URL_DIRECT=postgresql://user:password@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+# SMTP_HOST=smtp.gmail.com
+# SMTP_USER=alarms@yourdomain.com
+# SMTP_PASSWORD=app-password
+# SMTP_FROM=alarms@yourdomain.com
+# PORTAL_URL=http://192.168.90.10:3000
 ```
 
 | Variable | Default | Purpose |
@@ -66,6 +75,17 @@ BOX_TIMEZONE=Asia/Dhaka
 | `MAX_PHOTO_MB` | `5` | Largest face photo accepted (`413` above it) |
 | `FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg for the Live view |
 | `MAX_STREAMS` | `16` | Most live videos running at once (`503` above it) |
+| `DATABASE_URL` | (empty = alarms off) | PostgreSQL (Neon) connection string, pooled host. Without it the portal works as before and `/api/alarms/*` answers `503`. |
+| `DATABASE_URL_DIRECT` | (DATABASE_URL) | Neon's direct (non-pooler) host, used by Alembic migrations |
+| `SMTP_HOST` / `SMTP_PORT` | (empty) / `587` (`465` with ssl) | Email server for alarm emails. Without `SMTP_HOST` and `SMTP_FROM`, alarms are recorded and their emails wait in the queue. |
+| `SMTP_USER` / `SMTP_PASSWORD` | (empty) | SMTP login (for Gmail: an app password) |
+| `SMTP_FROM` / `SMTP_FROM_NAME` | `SMTP_USER` / `B4H Portal` | Sender address and name |
+| `SMTP_SECURITY` | `starttls` | `starttls`, `ssl` or `none` |
+| `PORTAL_URL` | `http://localhost:3000` | Portal address used in the links inside alarm emails. Set it to an address the recipients can open. |
+| `ALARM_POLL_SECONDS` | `5` | How often new detections are read from the box |
+| `ALARM_POLL_OVERLAP_SECONDS` | `60` | Each poll re-reads this much of the previous window, so records the box saves late aren't missed. Raise it if the box clock runs behind this PC. |
+| `ALARM_MAX_RECIPIENTS` | `5` | Most email recipients per rule |
+| `ALARM_WORKERS` | `1` | `0` turns polling and emails off in this process (e.g. a second instance) |
 
 Generate an API key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
@@ -77,6 +97,33 @@ Generate an API key with `python -c "import secrets; print(secrets.token_urlsafe
 - `GET /` stays open as a health check. FastAPI's own `/docs` and `/openapi.json` are also open (they aren't under `/api`).
 - The portal's sign-in page is a demo and doesn't protect anything; see [Architecture → Security model](../docs/architecture.md#4-security-model).
 
+## Database and alarms
+
+Alarms are the portal's own feature: the box's licensed alarm algorithms aren't needed. The backend reads every detection from the box, checks it against rules you set (camera, who, time window) and emails up to 5 recipients.
+
+**Set up (once):**
+
+1. Create a project on [Neon](https://neon.tech) in the region nearest the box (for Dhaka: Singapore). Copy the **pooled** connection string into `DATABASE_URL` and the **direct** one into `DATABASE_URL_DIRECT`.
+2. Create the tables: `uv run alembic upgrade head`
+3. Set the `SMTP_*` variables and `PORTAL_URL`, then restart the backend.
+4. On the **Alarms** page: add recipients, send a test email, create a rule.
+
+**How it works:**
+
+```
+box alarm_history --poll every 5 s--> events --> rules --> incidents --> notifications --> SMTP
+```
+
+- `alarms/ingest.py` reads the recognition and capture records of the last few seconds (re-reading a 60 s overlap) and saves them in `events`. A record is saved once (unique `box_id, kind, alarm_id`), so re-reading is harmless.
+- Only new events go to `alarms/engine.py`, **in the same transaction**: a crash never leaves an event without its alarm, and a replay never alarms twice.
+- A rule fires once per camera per quiet period (cooldown). Detections during the quiet period join the open alarm (`event_count`) instead of sending more email.
+- Times are checked in the rule's time zone (default `BOX_TIMEZONE`); a window ending before it starts (22:00 to 06:00) runs past midnight.
+- Records that arrive late (the portal was offline and is catching up) become alarms marked **delayed** and aren't emailed unless the rule says so. The first start only looks back 5 minutes.
+- `alarms/mailer.py` sends one email per recipient, with the snapshot attached, and retries failures (30 s, 1 min, 2 min…, 5 tries).
+- The pollers run inside the backend process: run **one** backend process (no `--workers N`).
+
+**Schema changes:** edit `models/`, then `uv run alembic revision --autogenerate -m "what changed"`, review the file in `migrations/versions/`, and `uv run alembic upgrade head`. `uv run alembic check` tells you if the models and migrations differ.
+
 ## Project structure
 
 ```
@@ -84,7 +131,12 @@ fastapi-app/
 ├─ main.py            # app entry: lifespan (login/close), error handlers, access check, router wiring
 ├─ core.py            # box client, config from .env, time-zone handling, people cache, API-key check
 ├─ b4h.py             # B4HClient: login (lockout-safe), session renewal, call/upload/get_bytes
+├─ db.py              # database connection (Neon URL handling, sessions)
+├─ models/            # database tables (SQLModel): reference, ingest, counting, alarms, admin
+├─ alarms/            # box records -> events -> rules -> incidents -> emails (+ background workers)
+├─ migrations/        # Alembic migrations (alembic.ini at the top)
 ├─ routers/
+│  ├─ alarms.py       # Alarms page: rules, recipients, incidents, status, test email
 │  ├─ devices.py      # Devices page: camera list + status, add, edit, delete
 │  ├─ preview.py      # Live view: camera list, RTSP → MJPEG stream (ffmpeg)
 │  ├─ recognition.py  # Recognition records, face-library person list
@@ -109,6 +161,7 @@ The full reference (parameters, response shapes, errors, and the box calls behin
 | `recognition.py` | `GET /api/recognition`, `DELETE /api/recognition/{alarm_id}`, `GET /api/people` |
 | `capture.py` | `GET /api/capture` |
 | `personnel.py` | `GET /api/personnel/groups`, `GET/POST /api/personnel`, `PUT/DELETE /api/personnel/{id}` |
+| `alarms.py` | `GET /api/alarms/status`, `GET /api/alarms/cameras`, `GET/POST /api/alarms/contacts`, `PUT/DELETE /api/alarms/contacts/{id}`, `POST /api/alarms/test-email`, `GET/POST /api/alarms/rules`, `GET/PUT/DELETE /api/alarms/rules/{id}`, `PATCH /api/alarms/rules/{id}/enabled`, `GET /api/alarms/incidents`, `GET /api/alarms/incidents/{id or public id}`, `PATCH /api/alarms/incidents/{id}` |
 | `timeplan.py` | `GET /api/timeplans/time`, `GET /api/timeplans/regular`, `GET /api/timeplans/festival`, `POST /api/timeplans`, `PUT/DELETE /api/timeplans/{plan_id}`, `DELETE /api/timeplans/stream-subscriptions` |
 
 The box endpoints these call are in [docs/box-api.md](../docs/box-api.md).
@@ -141,6 +194,12 @@ uv run pytest -k "password"                  # tests whose name matches
 - An unexpected box call fails the test, so a route can't silently hit an endpoint nobody planned for.
 - The API-key check is off in tests by default. `test_access.py` turns it on.
 - Sample box data in `conftest.py` (`DEVICE_CONFIG`, `DEVICE_STATE`, `TASK_LIST`) is copied from real responses.
+- **Alarm database tests** need a real PostgreSQL: set `TEST_DATABASE_URL` to an **empty, throwaway** database (its tables are dropped and recreated), e.g. a local Postgres or a Neon branch. Without it they are skipped.
+
+  ```bash
+  TEST_DATABASE_URL=postgresql://postgres@localhost:5432/b4h_test uv run pytest
+  # PowerShell: $env:TEST_DATABASE_URL="postgresql://..."; uv run pytest
+  ```
 
 | Test file | Covers |
 |---|---|
@@ -155,6 +214,9 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_capture.py` | Target-type mapping, record flattening, missing fields, paging, errors |
 | `test_personnel.py` | Groups, list, add/edit/delete, Bangla names, photo size limit, group-binding failure |
 | `test_common.py` | Image proxy: path whitelist, content types, fallbacks, session expiry, 404s |
+| `test_models.py` | Every table compiles to PostgreSQL; key unique constraints and indexes |
+| `test_alarm_rules.py` | Box record → event, overnight time windows, rule matching (who, camera, score, liveness, time zone), email content, retry gaps |
+| `test_alarms_db.py` | (needs `TEST_DATABASE_URL`) poll → events → alarm → queued emails, no duplicates on re-poll, cooldown grouping, per-track alarms, late events, box errors, email sending and retries, all `/api/alarms` routes |
 | `test_timeplan.py` | Box clock and its fallback, plan list/create/update/delete payloads, id mismatch refused, stream-subscription route not shadowed by `{plan_id}` |
 
 **Not covered yet:** `PUT /api/devices/{id}` (device edit) has no tests. Add them next.
@@ -196,4 +258,9 @@ It reads `API_KEY` from `.env`. Run it after box firmware changes, or before a r
 | `Time zone '…' not found` | Windows needs the `tzdata` package: run `uv sync` (it's a dependency), or `pip install tzdata` |
 | `ffmpeg not found` | Install ffmpeg and restart the backend from a **new** terminal, or set `FFMPEG_PATH` |
 | `Too many live videos open` | Close tiles or tabs, or raise `MAX_STREAMS` |
+| `503 The database isn't configured` | Set `DATABASE_URL` in `.env` and restart |
+| `503 The database is unreachable` | Check the Neon URL and internet access; Neon may be waking from scale-to-zero, so try again |
+| `relation "…" does not exist` in the log | Run `uv run alembic upgrade head` |
+| `Alarm polling failed` warnings | The box is unreachable; polling retries with growing waits (max 60 s) and catches up when it's back |
+| Alarm emails stay "Waiting to send" | `SMTP_HOST` / `SMTP_FROM` aren't set, or the SMTP server refuses: use **Send test** on the Recipients tab to see its message |
 | A `(…)` prefix appears in the terminal prompt | That's the project's Python virtual environment. Leave it active to run the backend; `deactivate` exits it. |

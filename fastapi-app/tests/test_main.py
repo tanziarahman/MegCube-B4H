@@ -39,3 +39,22 @@ def test_every_route_is_registered(client):
         ("PUT", "/api/personnel/{person_id}"), ("DELETE", "/api/personnel/{person_id}"),
     }
     assert expected - paths == set(), f"missing routes: {expected - paths}"
+
+def test_database_errors_say_what_to_do():
+    import asyncio
+    import json
+
+    from sqlalchemy.exc import DBAPIError
+    from starlette.requests import Request
+
+    from main import database_error
+
+    class Orig(Exception):
+        def __init__(self, sqlstate):
+            self.sqlstate = sqlstate
+
+    request = Request({"type": "http", "method": "GET", "path": "/api/alarms/rules", "headers": []})
+    missing = asyncio.run(database_error(request, DBAPIError("select", {}, Orig("42P01"))))
+    assert missing.status_code == 503 and "alembic upgrade head" in json.loads(missing.body)["detail"]
+    other = asyncio.run(database_error(request, DBAPIError("select", {}, Orig("08006"))))
+    assert json.loads(other.body)["detail"] == "The database is unreachable or refused the request."

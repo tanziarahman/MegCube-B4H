@@ -16,8 +16,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("b4h")
 
+BOX_BASE_URL = os.getenv("B4H_BASE_URL", "https://192.168.90.200")
 box = B4HClient(
-    os.getenv("B4H_BASE_URL", "https://192.168.90.200"),
+    BOX_BASE_URL,
     os.getenv("B4H_USER", "admin"),
     os.getenv("B4H_PASS", ""),  # set B4H_PASS in .env
     timeout=float(os.getenv("B4H_TIMEOUT", "15")),
@@ -30,6 +31,9 @@ BOX_GENERAL_ERROR = 1073741825  # the box's catch-all error code
 
 
 # ---------- time ----------
+
+BOX_TIMEZONE_NAME = os.getenv("BOX_TIMEZONE", "Asia/Dhaka")
+
 
 def _load_timezone():
     """Times typed in the portal are in the box's time zone, not the server's (a server or Docker

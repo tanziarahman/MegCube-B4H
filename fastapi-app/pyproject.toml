@@ -3,6 +3,8 @@ name = "fastapi-app"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.31.0",
     "fastapi[standard]",
     "httpx>=0.28.1",
     "python-dotenv>=1.2.3",

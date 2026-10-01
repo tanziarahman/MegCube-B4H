@@ -55,6 +55,7 @@ The **B4H Portal** is a friendlier web front end for that box. It has three part
 | Frontend | `client/` | Next.js 15 (App Router), React 19, TypeScript, Tailwind | Pages, forms, tables; maps backend JSON to UI types | [client/README.md](../client/README.md) |
 | Backend | `fastapi-app/` | Python 3.10+, FastAPI, httpx, ffmpeg | REST API for the frontend; box login, session, validation, password masking, image proxy, video conversion | [fastapi-app/README.md](../fastapi-app/README.md), [Backend API](backend-api.md) |
 | B4H box | (hardware) | Vendor firmware | Cameras, face library, records, schedules | [Box API](box-api.md) |
+| Database | Neon (cloud) | PostgreSQL, SQLModel, Alembic | Alarm rules, recipients, incidents, email queue, copies of box records (optional: `DATABASE_URL`) | [backend README → Database and alarms](../fastapi-app/README.md#database-and-alarms) |
 
 ### Inside the backend
 
@@ -64,6 +65,8 @@ The **B4H Portal** is a friendlier web front end for that box. It has three part
 | `core.py` | Shared config from `.env`, the single box client, time-zone helpers, people cache, API-key and stream-link signing |
 | `b4h.py` | `B4HClient`: challenge–response login, session renewal, one-at-a-time calls, uploads, binary downloads |
 | `routers/*.py` | One file per feature area; each route validates input, calls the box, reshapes the answer |
+| `db.py`, `models/` | Database connection and tables (SQLModel); migrations in `migrations/` (Alembic) |
+| `alarms/` | Background workers: poll box records into the database, check alarm rules, send alarm emails |
 
 ### Inside the frontend
 
@@ -179,7 +182,8 @@ The box's own live view needs a Windows browser plugin. The portal works around 
 | **People** `/people` | `GET/POST /api/personnel`, `PUT/DELETE /api/personnel/{id}`, `GET /api/personnel/groups`, `GET /api/image` | `face_manager/groups/query`, `face_manager/person[/query]`, `face_manager/person_bind`, `get_image` |
 | **Devices** `/devices` | `GET /api/devices/detail`, `POST /api/devices`, `PUT/DELETE /api/devices/{id}` | `device_config` (read, update), `device_state`, `device` (add, delete) |
 | **Time plans** `/timeplans` | `GET /api/timeplans/time`, `GET /api/timeplans/regular`, `GET /api/timeplans/festival`, `POST /api/timeplans`, `PUT/DELETE /api/timeplans/{id}` | `get_system_time`, `get_time_info`, `schedule_plan/query`, `schedule_plan` (create, update, delete) |
-| **Alarms**, **People counting**, **Settings** | none (placeholder pages) | not captured yet |
+| **Alarms** `/alarms`, `/alarms/{id}` | `/api/alarms/*` (rules, contacts, incidents, status, test email) | none directly; the background worker uses `alarm_history` (recognition + capture queries) and `device_config`, and `get_image` for email snapshots |
+| **People counting**, **Settings** | none (placeholder pages) | not captured yet |
 
 ---
 
@@ -193,7 +197,7 @@ Found while verifying these docs against the code (2026-10-01). Each is a candid
 | 2 | People | An empty group selection leaves groups unchanged (as in the box's own UI), so a person can't be removed from **all** groups. The box request for "no groups" hasn't been captured. | Use the box UI to clear all groups. |
 | 3 | People | `/api/personnel` is called with `get_feature=true`, so the box includes large face-feature data the page doesn't use. Not changed yet: it isn't confirmed that the photo path still comes back with `false`. | Slower People page. |
 | 4 | Recognition / Captures | Camera and track-ID filters only filter the page already loaded; the box has no confirmed device filter. | Results can look incomplete; the page says so. |
-| 5 | Top bar | Search only opens People; the **Demo data**, **Devices 20 / 24**, **Live** chips and the Alarms badge (**12**) are fixed values. | Not real data. |
+| 5 | Top bar | Search only opens People; the **Demo data**, **Devices 20 / 24** and **Live** chips are fixed values. (The sidebar Alarms badge is real: open alarms, refreshed every minute.) | Not real data. |
 | 6 | Devices | Picture devices and GB28181 cameras can't be added or edited; their box requests haven't been captured. | Use the box's own web UI. |
 
 **Fixed on 2026-10-01:** `DELETE /api/timeplans/stream-subscriptions` was shadowed by the `{plan_id}` route (always `422`); Captures **Refresh** did nothing on page 1; Live view's "Latest recognitions" paged through the whole day every 5 s (now one request); editing a person reset their gender to `0`; misleading Time plans messages. The route-order and Refresh fixes have regression tests (`tests/test_timeplan.py`, `CapturesView.test.tsx`).

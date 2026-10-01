@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import PageHeader from '@/components/common/PageHeader';
-import Placeholder from '@/components/common/Placeholder';
+import AlarmsView from '@/components/alarms/AlarmsView';
 
 export const metadata: Metadata = { title: 'Alarms' };
 
 export default function Page() {
   return (
     <>
-      <PageHeader title="Alarms" subtitle="Rule-based alarms reported by the boxes" />
-      <Placeholder text="Alarms content goes here" />
+      <PageHeader title="Alarms" subtitle="Your own rules, checked against every detection from the box" />
+      <AlarmsView />
     </>
   );
 }

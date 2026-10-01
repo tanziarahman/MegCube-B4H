@@ -89,6 +89,8 @@ Settings live in git-ignored env files. **Never commit real passwords or keys.**
 | | `BOX_TIMEZONE` | `Asia/Dhaka` | Time zone of the box; used for all date filters |
 | | `B4H_TIMEOUT` | `15` | Seconds to wait for the box before answering `504` |
 | | `FFMPEG_PATH` / `MAX_STREAMS` | `ffmpeg` / `16` | Live view: ffmpeg location, most videos at once |
+| | `DATABASE_URL` | (empty = alarms off) | Neon PostgreSQL for alarms; then run `uv run alembic upgrade head` |
+| | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PORTAL_URL` | | Alarm emails, see [backend README](fastapi-app/README.md#environment-variables) |
 | | `RECOG_MAJOR`, `PEOPLE_CACHE_SECONDS`, `MAX_PHOTO_MB` | | See [backend README](fastapi-app/README.md#environment-variables) |
 | `client/.env.local` | `BACKEND_URL` | `http://localhost:8000` | Where the Next.js server forwards `/api/*` |
 | | `BACKEND_API_KEY` | (none) | Same value as the backend's `API_KEY` |
@@ -105,7 +107,8 @@ Settings live in git-ignored env files. **Never commit real passwords or keys.**
 | People (face library) | `/people` | ✅ Add, edit, delete people; groups |
 | Devices | `/devices` | ✅ RTSP video cameras: status, add, edit, delete · ⏳ Picture / GB28181 devices |
 | Time plans | `/timeplans` | ✅ Regular and festival plans: create, edit, delete; box clock |
-| Alarms, People counting, Settings | | ⏳ Placeholder pages |
+| Alarms | `/alarms` | ✅ Your own rules (camera + who + time window) checked against every detection; email up to 5 recipients; acknowledge/resolve. Needs `DATABASE_URL` (Neon), see [backend README](fastapi-app/README.md#database-and-alarms) |
+| People counting, Settings | | ⏳ Placeholder pages |
 
 Known bugs and limitations are listed in [Architecture → Known issues](docs/architecture.md#9-known-issues-and-limitations).
 
@@ -115,7 +118,7 @@ Known bugs and limitations are listed in [Architecture → Known issues](docs/ar
 
 | What | Where | Command | Needs |
 |---|---|---|---|
-| Backend unit/API tests | `fastapi-app/tests/` | `cd fastapi-app && uv run pytest` | Nothing; a `FakeBox` stands in for the box |
+| Backend unit/API tests | `fastapi-app/tests/` | `cd fastapi-app && uv run pytest` | Nothing; a `FakeBox` stands in for the box. Alarm database tests also need `TEST_DATABASE_URL` (a throwaway PostgreSQL), else they're skipped |
 | Frontend unit/component tests | `client/src/**/*.test.tsx` | `cd client && npm test` | Nothing; MSW fakes the backend |
 | Frontend end-to-end tests | `client/e2e/` | `cd client && npm run test:e2e` | Browsers (`npx playwright install` the first time) |
 | Live check (read-only) | `fastapi-app/tests/live_check.py` | `uv run python tests/live_check.py` | A running backend **and the real box** |

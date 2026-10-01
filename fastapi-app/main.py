@@ -4,10 +4,13 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 
+import db
+from alarms import worker as alarm_worker
 from b4h import B4HError
 from core import box, check_access, log
-from routers import capture, common, dashboard, devices, personnel, preview, recognition, timeplan
+from routers import alarms, capture, common, dashboard, devices, personnel, preview, recognition, timeplan
 
 
 @asynccontextmanager
@@ -21,7 +24,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         # Box offline/rebooting: start anyway, the first request logs in again.
         log.warning("B4H login at startup failed (%r); will retry on first request", e)
+    alarm_worker.start()          # box polling + alarm emails (only when DATABASE_URL is set)
     yield
+    await alarm_worker.stop()
+    await db.dispose()
     await box.close()
 
 
@@ -42,11 +48,20 @@ async def box_unreachable(request: Request, exc: httpx.TransportError):
     return JSONResponse(status_code=503, content={"detail": f"B4H box unreachable ({type(exc).__name__})"})
 
 
+@app.exception_handler(DBAPIError)
+async def database_error(request: Request, exc: DBAPIError):
+    log.warning("Database error on %s: %r", request.url.path, exc.orig)
+    if getattr(exc.orig, "sqlstate", None) == "42P01":     # undefined_table: migrations weren't run
+        return JSONResponse(status_code=503, content={"detail": (
+            "The database has no tables yet. In fastapi-app run: uv run alembic upgrade head")})
+    return JSONResponse(status_code=503, content={"detail": "The database is unreachable or refused the request."})
+
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
 
 # Every /api route needs the API key (when API_KEY is set in .env); see core.check_access.
-for r in (recognition, capture, common, preview, personnel, devices, timeplan, dashboard):
+for r in (recognition, capture, common, preview, personnel, devices, timeplan, dashboard, alarms):
     app.include_router(r.router, dependencies=[Depends(check_access)])

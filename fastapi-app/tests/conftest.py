@@ -21,6 +21,11 @@ from b4h import B4HError  # noqa: E402
 import core  # noqa: E402
 from core import box  # noqa: E402
 from main import app  # noqa: E402
+import db  # noqa: E402
+
+# Tests never use the DATABASE_URL from .env (your real database): only TEST_DATABASE_URL, via the
+# `database` fixture below. Without it, the app behaves as if no database is configured.
+db.DATABASE_URL = ""
 
 
 class FakeBox:
@@ -100,6 +105,54 @@ def client(fake_box):
 
 def box_error(code=1073741825, message="general", path="/x"):
     return B4HError(code, message, path)
+
+
+# ---- database (alarm tests) ----
+# Alarm tests need a real PostgreSQL: set TEST_DATABASE_URL to an EMPTY database you don't mind
+# losing (its tables are dropped and recreated), e.g. postgresql://postgres@localhost:5432/b4h_test
+# or a throwaway Neon branch. Without it those tests are skipped.
+
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "")
+_schema_ready = False
+
+
+async def _reset_schema(engine) -> None:
+    from sqlmodel import SQLModel
+    import models  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+
+async def _truncate(engine) -> None:
+    from sqlalchemy import text
+    from sqlmodel import SQLModel
+    tables = ", ".join(t.name for t in SQLModel.metadata.sorted_tables)
+    async with engine.begin() as conn:
+        await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
+def database(monkeypatch):
+    """Empty tables, wired into db.sessions(). Yields the session factory."""
+    if not TEST_DATABASE_URL:
+        pytest.skip("Set TEST_DATABASE_URL to run database tests")
+    import asyncio
+
+    import db
+    from routers import alarms as alarms_router
+
+    global _schema_ready
+    engine = db.make_engine(TEST_DATABASE_URL, null_pool=True)   # NullPool: safe across event loops
+    if not _schema_ready:
+        asyncio.run(_reset_schema(engine))
+        _schema_ready = True
+    asyncio.run(_truncate(engine))
+    monkeypatch.setattr(alarms_router, "_box_id", None)      # box ids restart at 1 after the truncate
+    db.configure(engine)
+    yield db.sessions()
+    db._sessions = db._engine = None       # other tests see "no database" again
+    asyncio.run(engine.dispose())
 
 
 # ---- sample box data, copied from real responses ----
