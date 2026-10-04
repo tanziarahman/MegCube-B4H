@@ -1,4 +1,5 @@
-"""Background loops started with the app: box polling (ingest + rules) and the email sender.
+"""Background loops started with the app: box polling (ingest + rules + face fingerprints) and the
+email sender.
 
 They run inside the FastAPI process, so run the backend as ONE process (no `--workers N`).
 Turned on when DATABASE_URL is set; ALARM_WORKERS=0 turns them off (e.g. a second instance).
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import db
 from core import box
+from faces import worker as faces
 from models import IngestStream
 
 from . import ingest, mailer
@@ -50,6 +52,7 @@ async def ingest_loop() -> None:
                         synced_at = _now()
             for stream in IngestStream:
                 await ingest.poll_stream(sessions, box_id, stream)
+            await _fingerprint_faces(sessions)
             failures = 0
             state["ingest"].update(last_ok=_now().isoformat(), last_error=None)
             await asyncio.sleep(POLL_SECONDS)
@@ -61,6 +64,16 @@ async def ingest_loop() -> None:
             delay = min(MAX_BACKOFF_SECONDS, POLL_SECONDS * 2 ** min(failures, 6))
             log.warning("Alarm polling failed (%s in a row), retrying in %.0f s: %r", failures, delay, exc)
             await asyncio.sleep(delay)
+
+
+async def _fingerprint_faces(sessions) -> None:
+    """People counting's face fingerprints; a failure here must not hold up polling or alarms."""
+    try:
+        await faces.process_pending(sessions)
+        faces.state["last_error"] = None
+    except Exception as exc:  # noqa: BLE001 - e.g. the box can't serve pictures right now; next cycle retries
+        faces.state["last_error"] = f"{type(exc).__name__}: {exc}"[:500]
+        log.warning("Face fingerprints failed, retrying next cycle: %r", exc)
 
 
 async def mail_loop() -> None:

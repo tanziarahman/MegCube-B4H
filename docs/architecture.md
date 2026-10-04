@@ -183,7 +183,8 @@ The box's own live view needs a Windows browser plugin. The portal works around 
 | **Devices** `/devices` | `GET /api/devices/detail`, `POST /api/devices`, `PUT/DELETE /api/devices/{id}` | `device_config` (read, update), `device_state`, `device` (add, delete) |
 | **Time plans** `/timeplans` | `GET /api/timeplans/time`, `GET /api/timeplans/regular`, `GET /api/timeplans/festival`, `POST /api/timeplans`, `PUT/DELETE /api/timeplans/{id}` | `get_system_time`, `get_time_info`, `schedule_plan/query`, `schedule_plan` (create, update, delete) |
 | **Alarms** `/alarms`, `/alarms/{id}` | `/api/alarms/*` (rules, contacts, incidents, status, test email) | none directly; the background worker uses `alarm_history` (recognition + capture queries) and `device_config`, and `get_image` for email snapshots |
-| **People counting**, **Settings** | none (placeholder pages) | not captured yet |
+| **People counting** `/counting` | `/api/counting/*` (summary, series, heatmap, sightings, camera settings), `GET /api/image` | none directly; built from the events the alarm worker stores (`alarm_history`), plus `get_image` for pictures |
+| **Settings** | none (placeholder page) | not captured yet |
 
 ---
 

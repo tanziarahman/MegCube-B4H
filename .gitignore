@@ -47,3 +47,6 @@ __pycache__/
 node_modules/
 .next/
 contributions.md
+
+# Face models (downloaded with: uv run python -m faces.download)
+face_models/

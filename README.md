@@ -89,9 +89,9 @@ Settings live in git-ignored env files. **Never commit real passwords or keys.**
 | | `BOX_TIMEZONE` | `Asia/Dhaka` | Time zone of the box; used for all date filters |
 | | `B4H_TIMEOUT` | `15` | Seconds to wait for the box before answering `504` |
 | | `FFMPEG_PATH` / `MAX_STREAMS` | `ffmpeg` / `16` | Live view: ffmpeg location, most videos at once |
-| | `DATABASE_URL` | (empty = alarms off) | Neon PostgreSQL for alarms; then run `uv run alembic upgrade head` |
+| | `DATABASE_URL` | (empty = alarms off) | Neon PostgreSQL for alarms and people counting; then run `uv run alembic upgrade head` |
 | | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PORTAL_URL` | | Alarm emails, see [backend README](fastapi-app/README.md#environment-variables) |
-| | `RECOG_MAJOR`, `PEOPLE_CACHE_SECONDS`, `MAX_PHOTO_MB` | | See [backend README](fastapi-app/README.md#environment-variables) |
+| | `RECOG_MAJOR`, `PEOPLE_CACHE_SECONDS`, `MAX_PHOTO_MB`, `COUNT_*` | | See [backend README](fastapi-app/README.md#environment-variables) |
 | `client/.env.local` | `BACKEND_URL` | `http://localhost:8000` | Where the Next.js server forwards `/api/*` |
 | | `BACKEND_API_KEY` | (none) | Same value as the backend's `API_KEY` |
 | | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` | Backend address **as the browser sees it** (live video). Change it when users open the portal from another PC. |
@@ -108,7 +108,8 @@ Settings live in git-ignored env files. **Never commit real passwords or keys.**
 | Devices | `/devices` | ✅ RTSP video cameras: status, add, edit, delete · ⏳ Picture / GB28181 devices |
 | Time plans | `/timeplans` | ✅ Regular and festival plans: create, edit, delete; box clock |
 | Alarms | `/alarms` | ✅ Your own rules (camera + who + time window) checked against every detection; email up to 5 recipients; acknowledge/resolve. Needs `DATABASE_URL` (Neon), see [backend README](fastapi-app/README.md#database-and-alarms) |
-| People counting, Settings | | ⏳ Placeholder pages |
+| People counting | `/counting` | ✅ Walk-pasts and different people per camera (people told apart by comparing clothing and faces, shown as an estimate with a range), filtered by period, hours of the day and weekdays; chart over time, busy times, the walk-pasts behind the numbers. Built from the records the alarm worker stores, so it also needs `DATABASE_URL` |
+| Settings | | ⏳ Placeholder page |
 
 Known bugs and limitations are listed in [Architecture → Known issues](docs/architecture.md#9-known-issues-and-limitations).
 

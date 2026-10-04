@@ -171,6 +171,52 @@ export const sampleIncidentDetail = {
     sent_at: '2026-09-28T17:04:40+00:00', next_attempt_at: '2026-09-28T17:04:34+00:00' }],
 };
 
+const countingTotals = {
+  walk_pasts: 12, visits: 12, unique_people: 12, known_people: 0, stranger_walk_pasts: 0,
+  not_compared_walk_pasts: 12, paired: 9, face_only: 2, body_only: 1,
+};
+
+export const sampleCountingSummary = {
+  period: { start: '2026-10-04T00:00:00+06:00', end: '2026-10-04T15:00:00+06:00', timezone: 'Asia/Dhaka' },
+  totals: {
+    ...countingTotals,
+    face_estimate: { people: 8, low: 6, high: 10, fingerprinted: 10, unusable: 2, pending: 0, too_many: false },
+  },
+  by_camera: [
+    { camera_id: 1, name: 'Hikvision', count_basis: 'merged', ...countingTotals, walk_pasts: 2, visits: 2, unique_people: 2, paired: 2, face_only: 0, body_only: 0 },
+    { camera_id: 2, name: 'IPCAM-D3', count_basis: 'merged', ...countingTotals, walk_pasts: 10, visits: 10, unique_people: 10, paired: 7 },
+  ],
+  identity_available: false,
+  face_matching: { available: true, reason: null },
+  last_sighting_at: '2026-10-04T09:12:03+00:00',
+};
+
+export const sampleCountingSeries = {
+  granularity: 'hour',
+  points: Array.from({ length: 24 }, (_, h) => ({
+    start: `2026-10-04T${String(h).padStart(2, '0')}:00:00+06:00`, walk_pasts: h === 9 ? 8 : h === 14 ? 4 : 0, face: 0, body: 0,
+    new_people: h === 9 ? 6 : h === 14 ? 2 : 0,
+  })),
+};
+
+export const sampleCountingHeatmap = {
+  cells: [{ iso_dow: 7, hour: 9, walk_pasts: 8, avg_walk_pasts: 8 }, { iso_dow: 7, hour: 14, walk_pasts: 4, avg_walk_pasts: 4 }],
+  days_in_range: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 1 },
+};
+
+export const sampleSighting = {
+  id: 881, camera_id: 2, camera_name: 'IPCAM-D3', first_seen_at: '2026-10-04T03:12:00+00:00',
+  last_seen_at: '2026-10-04T03:12:01.300000+00:00', duration_seconds: 1.3, face_track_id: 5735752, body_track_id: 5735751,
+  person_source: 'unidentified', person_name: null, recognition_result: null, event_count: 3,
+  face_image_path: './record_CHN0/face.jpg', body_image_path: './record_CHN0/body.jpg',
+  person_no: 3, new_person: false, person_first_seen_at: '2026-10-04T03:01:00+00:00',
+};
+
+export const sampleCountingCameras = [
+  { id: 1, device_id: 1, name: 'Hikvision', deleted: false, count_enabled: true, count_basis: 'merged' },
+  { id: 2, device_id: 2, name: 'IPCAM-D3', deleted: false, count_enabled: true, count_basis: 'merged' },
+];
+
 export const handlers = [
   http.get('/api/dashboard/summary', () => HttpResponse.json(sampleDashboard)),
   http.get('/api/devices/detail', () => HttpResponse.json(sampleDevices)),
@@ -191,6 +237,13 @@ export const handlers = [
   http.get('/api/alarms/incidents', () => HttpResponse.json({ total: 1, page: 1, size: 20, items: [sampleIncident] })),
   http.get('/api/alarms/incidents/:ref', () => HttpResponse.json(sampleIncidentDetail)),
   http.patch('/api/alarms/incidents/:id', async ({ request }) => HttpResponse.json({ ...sampleIncident, ...(await request.json() as object) })),
+  http.get('/api/counting/summary', () => HttpResponse.json(sampleCountingSummary)),
+  http.get('/api/counting/series', () => HttpResponse.json(sampleCountingSeries)),
+  http.get('/api/counting/heatmap', () => HttpResponse.json(sampleCountingHeatmap)),
+  http.get('/api/counting/sightings', () => HttpResponse.json({ total: 1, page: 1, size: 20, items: [sampleSighting] })),
+  http.get('/api/counting/cameras', () => HttpResponse.json(sampleCountingCameras)),
+  http.patch('/api/counting/cameras/:id', async ({ params, request }) => HttpResponse.json({
+    ...sampleCountingCameras.find((c) => c.id === Number(params.id)), ...(await request.json() as object) })),
 ];
 
 export const serverErrorHandlers = {

@@ -2,7 +2,8 @@
 
 Each poll reads the time window [cursor - overlap, now] (capped at MAX_WINDOW, so catching up after
 downtime goes in slices) and saves the records with ON CONFLICT DO NOTHING. Only records we hadn't
-seen go on to the rules, in the same transaction, so re-reading the overlap is harmless.
+seen go on to people counting (sightings) and the rules, in the same transaction, so re-reading the
+overlap is harmless.
 """
 import logging
 import os
@@ -13,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+import counting
 from core import BOX_BASE_URL, BOX_MAX_PAGE_SIZE, BOX_TIMEZONE_NAME, RECOG_MAJOR, alarm_history_page, box
 from models import Box, Camera, Event, EventSource, IngestCursor, IngestStream
 
@@ -148,6 +150,7 @@ async def poll_stream(sessions, box_id: int, stream: IngestStream, now: datetime
     async with sessions() as session:
         async with session.begin():
             new_events = await save_events(session, box_id, rows, EventSource.POLL, now)
+            await counting.attach(session, new_events, box_id)      # sightings + 15-minute buckets
             await engine.process(session, new_events, box_id)
             cursor = await session.get(IngestCursor, (box_id, stream.value)) or \
                 IngestCursor(box_id=box_id, stream=stream.value)

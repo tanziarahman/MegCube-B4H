@@ -26,6 +26,7 @@ The backend also generates interactive docs at **`http://localhost:8000/docs`** 
 13. [Errors](#13-errors)
 14. [Frontend client map](#14-frontend-client-map)
 15. [Alarms](#15-alarms)
+16. [People counting](#16-people-counting)
 
 ---
 
@@ -100,6 +101,11 @@ curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/devices/detail"
 | GET | [`/api/alarms/incidents`](#155-get-apialarmsincidents) | Alarms that fired | Alarms |
 | GET | [`/api/alarms/incidents/{ref}`](#156-get-apialarmsincidentsref) | One alarm with detections and emails | Alarm detail |
 | PATCH | [`/api/alarms/incidents/{id}`](#157-patch-apialarmsincidentsid) | Acknowledge, resolve, note | Alarms, Alarm detail |
+| GET | [`/api/counting/summary`](#162-get-apicountingsummary) | Walk-pasts, visits, different people, per camera | People counting |
+| GET | [`/api/counting/series`](#163-get-apicountingseries) | Walk-pasts over time | People counting |
+| GET | [`/api/counting/heatmap`](#164-get-apicountingheatmap) | Busy times (weekday × hour) | People counting |
+| GET | [`/api/counting/sightings`](#165-get-apicountingsightings) | The walk-pasts behind the numbers | People counting |
+| GET/PATCH | [`/api/counting/cameras[/{id}]`](#166-camera-settings) | Which cameras count, and how | People counting |
 
 ---
 
@@ -838,6 +844,11 @@ Which frontend function calls which route (`client/src/lib/`):
 | | `fetchContacts()`, `saveContact(c)`, `deleteContact(id)`, `sendTestEmail(to)` | `/api/alarms/contacts`, `/api/alarms/test-email` |
 | | `fetchRules()`, `createRule(r)`, `updateRule(id, version, r)`, `setRuleEnabled(id, on)`, `deleteRule(id)` | `/api/alarms/rules` |
 | | `fetchIncidents(f)`, `fetchIncident(ref)`, `updateIncident(id, change)` | `/api/alarms/incidents` |
+| `counting.ts` | `fetchCountingSummary(f)` | `GET /api/counting/summary` |
+| | `fetchCountingSeries(f, granularity)` | `GET /api/counting/series` |
+| | `fetchCountingHeatmap(f)` | `GET /api/counting/heatmap` |
+| | `fetchSightings(f, page, size)` | `GET /api/counting/sightings` |
+| | `fetchCountingCameras()`, `updateCountingCamera(id, change)` | `/api/counting/cameras` |
 | (all with images) | `imageUrl(uri)` helpers | `GET /api/image?uri=…` |
 
 ---
@@ -977,3 +988,100 @@ Alarms, newest first.
 ```
 
 All fields optional. Moving away from `open` records `acknowledged_at` and `acknowledged_by` (`by`, or `portal`); back to `open` clears them. Every change is written to the audit log.
+
+---
+
+## 16. People counting
+
+How many people walked past each camera, and how many different people that was. Built from the box records the alarm worker already stores (no extra box calls): each record is put into a **sighting**, one person passing one camera once, as it arrives. The box never puts a face and a body in one record, but numbers them from one counter, so face track `F` and body track `F − 1` on the same camera (first records at most `COUNT_PAIR_MAX_SECONDS` apart) are merged into one sighting.
+
+Like Alarms, this needs the **database**: without `DATABASE_URL` every route answers `503`. Sightings for records saved before this feature existed are built once with `uv run python -m counting.backfill` (see the [backend README](../fastapi-app/README.md#database-and-alarms)).
+
+### 16.1 Terms and shared parameters
+
+| Term | Meaning | Accuracy |
+|---|---|---|
+| `walk_pasts` | Sightings: one person passing one camera once | Very good |
+| `visits` | Sightings of the same **identified** person on the same camera within `COUNT_VISIT_GAP_SECONDS` (120) count once | Equals walk-pasts until people are identified |
+| `unique_people` | `COUNT(DISTINCT person_key)`: different people in the cameras and period | Exact for recognised people; an **upper bound** for everyone else |
+| `known_people` | Different face-library people | Exact |
+| `stranger_walk_pasts` | Walk-pasts the box compared and found no match for. Strangers aren't grouped, so these aren't different people | Exact as a walk-past count |
+
+Today the box sends no face-recognition results, so nobody can be identified and `unique_people` = `visits` = `walk_pasts`. `identity_available` (summary) says whether that has changed.
+
+**Different people by face and clothing (`face_estimate`).** After each poll the backend fingerprints the face picture (OpenCV YuNet + SFace) and the whole-body picture (YouTu ReID: mostly clothing) of every new walk-past; see the [backend README](../fastapi-app/README.md#database-and-alarms). For a request, the walk-pasts in the chosen cameras and period are grouped: recognised people by their library id, everyone else by similarity (60 % body, 40 % face; bodies only within the same day, since clothes change; two walk-pasts on one camera at the same moment are never one person). The answer is a range: `people` at `PEOPLE_MATCH_THRESHOLD` (0.35), `low` at 0.05 looser, `high` at 0.05 stricter. Walk-pasts with no usable face or body picture aren't in it. Across several days only faces can link a person, so multi-day counts run higher than the truth.
+
+Every route except the camera settings takes:
+
+| Param | Default | Rules |
+|---|---|---|
+| `camera_id` | every camera with `count_enabled` | Repeatable. Portal camera ids (16.6). Unknown or removed → `422` |
+| `start`, `end` | today 00:00:00 → now | `YYYY-MM-DD HH:mm:ss` in the box's time zone; `start` must be before `end`; at most 366 days |
+| `hours` | all day | `9-17` (inclusive local hours 0–23) or `22-5` (past midnight) |
+| `days` | every day | ISO weekdays, `1,2,3,4,5` = Monday–Friday |
+
+A sighting belongs to the time, hour and weekday of its **first** record (box clock). Each camera's `count_basis` decides which of its sightings count: `merged` all, `face` only those with a face track, `body` only those with a body track.
+
+### 16.2 `GET /api/counting/summary`
+
+```json
+{
+  "period": { "start": "2026-10-04T00:00:00+06:00", "end": "2026-10-04T15:12:03+06:00", "timezone": "Asia/Dhaka" },
+  "totals": { "walk_pasts": 120, "visits": 118, "unique_people": 118, "known_people": 0, "stranger_walk_pasts": 0,
+              "not_compared_walk_pasts": 120, "paired": 104, "face_only": 9, "body_only": 7,
+              "face_estimate": { "people": 7, "low": 6, "high": 10, "fingerprinted": 69, "unusable": 1,
+                                 "pending": 0, "too_many": false } },
+  "by_camera": [ { "camera_id": 2, "name": "IPCAM-D3", "count_basis": "merged", "walk_pasts": 120, "visits": 118,
+                   "face_estimate": { "…": "…" }, "…": "…" } ],
+  "identity_available": false,
+  "face_matching": { "available": true, "reason": null },
+  "last_sighting_at": "2026-10-04T09:12:03+00:00"
+}
+```
+
+`paired` have both a face and a body track, `face_only` no body, `body_only` no face. `face_estimate`: `fingerprinted` walk-pasts are in the estimate, `unusable` aren't (nothing to compare), `pending` haven't been processed yet; `too_many: true` (more than `PEOPLE_MAX_GROUPING`, 2000, walk-pasts) leaves `people`/`low`/`high` `null`: pick a shorter period. `face_matching.available` is false (with a `reason`) when the models aren't installed or `FACE_MATCHING=0`. `identity_available`: any recognised or stranger record on these cameras in the last 7 days. `last_sighting_at`: latest sighting on these cameras, whatever the period.
+
+### 16.3 `GET /api/counting/series`
+
+`granularity` = `15m` (range ≤ 7 days), `hour` (default, ≤ 62 days) or `day` (≤ 366 days); a longer range → `422` naming the granularity to use. Points are zero-filled and skip slots outside `hours` / `days`. `face` / `body` are the walk-pasts with a face / body track.
+
+```json
+{ "granularity": "hour", "points": [ { "start": "2026-10-04T09:00:00+06:00", "walk_pasts": 4, "face": 3, "body": 4, "new_people": 2 } ] }
+```
+
+`new_people`: people seen for the **first time in the period**, counted in the slot of their first walk-past; someone who comes back later in the period isn't counted again. They add up to `face_estimate.people` (summary). `null` when the period has too many fingerprints to group.
+
+Read from 15-minute totals: a bucket that starts before `start` but overlaps it is included.
+
+### 16.4 `GET /api/counting/heatmap`
+
+Busy times: walk-pasts per weekday × local hour, **averaged per day** (divided by how many of that weekday the range covers), so a range with three Mondays doesn't look three times busier. Only cells with walk-pasts are listed.
+
+```json
+{ "cells": [ { "iso_dow": 1, "hour": 9, "walk_pasts": 7, "avg_walk_pasts": 3.5 } ],
+  "days_in_range": { "1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1 } }
+```
+
+### 16.5 `GET /api/counting/sightings`
+
+The walk-pasts behind the numbers, newest first. `page` / `size` (default `1` / `20`, `size` ≤ 100).
+
+```json
+{ "total": 120, "page": 1, "size": 20, "items": [ {
+    "id": 881, "camera_id": 2, "camera_name": "IPCAM-D3", "first_seen_at": "…", "last_seen_at": "…",
+    "duration_seconds": 1.3, "face_track_id": 5735752, "body_track_id": 5735751, "person_source": "unidentified",
+    "person_name": null, "recognition_result": null, "event_count": 3,
+    "face_image_path": "./record_CHN0/…", "body_image_path": "./record_CHN0/…",
+    "person_no": 5, "new_person": false, "person_first_seen_at": "2026-10-04T03:44:52+00:00" } ] }
+```
+
+Each item also has `person_no` (the n-th different person in the period, in order of first appearance), `new_person` (`true` on that person's first walk-past in the period, `false` when they came back) and `person_first_seen_at`; all three are `null` when the walk-past had no usable face or body picture. `person_source`: `recognized` / `stranger` / `unidentified`. `recognition_result`: `matched`, `stranger` or `null` (not compared). Images go through [`GET /api/image`](#121-get-apiimage).
+
+### 16.6 Camera settings
+
+| Method | Path | Body → response |
+|---|---|---|
+| GET | `/api/counting/cameras` | `[ { "id", "device_id", "name", "deleted", "count_enabled", "count_basis" } ]` (the alarm worker keeps the list in sync with the box) |
+| PATCH | `/api/counting/cameras/{id}` | `{ "count_enabled"?: false, "count_basis"?: "merged" \| "face" \| "body" }` → the camera. `404` if unknown. Written to the audit log |
+
+`count_enabled: false` leaves a camera out of the default camera list; its sightings are still built, and asking for it by `camera_id` still shows them.

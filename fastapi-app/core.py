@@ -1,12 +1,15 @@
 """Shared pieces: the box connection, config, access check, and small helpers used by every router."""
 import hashlib
 import hmac
+import json
 import logging
+import mimetypes
 import os
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request
 
@@ -84,6 +87,60 @@ async def alarm_history_page(body: dict) -> dict:
         if body["offset"] < total:
             raise  # a real error, not just an empty page
         return {"total_count": total, "return_count": 0, "list": []}
+
+
+# Only image files under these box locations may be fetched (the backend holds the admin session).
+_IMAGE_PREFIXES = ("./record_", "record_", "./group/", "group/", "/home/appdata/")
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+_SESSION_LOST = 512
+
+
+def is_box_image_path(uri: str) -> bool:
+    return ".." not in uri and uri.startswith(_IMAGE_PREFIXES) and uri.lower().endswith(_IMAGE_EXTS)
+
+
+def _looks_like_error(content: bytes) -> bool:
+    s = content.lstrip()
+    return not content or s.startswith(b"{") or s.startswith(b"<!") or s.startswith(b"<html")
+
+
+def _session_lost(content: bytes) -> bool:
+    try:
+        return json.loads(content).get("code") == _SESSION_LOST
+    except (ValueError, AttributeError):
+        return False
+
+
+async def box_image(uri: str) -> tuple[bytes, str] | None:
+    """(content, media type) of a record or face-library image on the box, or None when the box no
+    longer has it (it rotates old records out). Used by the image proxy and the face worker."""
+    # The box serves both face-library (/home/appdata/...) and alarm (./record_...) images
+    # via /device_storage/get_image?image_uri=...
+    paths = [("/device_storage/get_image", {"image_uri": uri})]
+    if uri.startswith("/"):
+        paths.append((uri, None))
+    paths.append(("/web/" + uri.removeprefix("./").lstrip("/"), None))
+
+    relogged = False
+    for path, params in paths:
+        try:
+            session = box.session_id
+            content, media_type = await box.get_bytes(path, params)
+            if _session_lost(content) and not relogged:
+                # Box dropped the idle session: log in again (unless another request already did)
+                # and retry this path once.
+                await box.relogin(session)
+                relogged = True
+                content, media_type = await box.get_bytes(path, params)
+            if _looks_like_error(content):
+                continue
+            if not media_type or not media_type.startswith("image/"):
+                guessed = mimetypes.guess_type(uri)[0]
+                media_type = guessed if guessed and guessed.startswith("image/") else "image/jpeg"
+            return content, media_type
+        except httpx.HTTPStatusError:
+            continue
+    return None
 
 
 # Short-lived copy of the whole face library (id + name) for /api/people: with a big library,

@@ -21,11 +21,12 @@ This guide explains how to use the B4H Portal day to day: what each page is for,
 10. [Devices](#10-devices): cameras
 11. [Time plans](#11-time-plans): schedules
 12. [Alarms](#12-alarms): get emailed when someone is where they shouldn't be
-13. [Pages not available yet](#13-pages-not-available-yet)
-14. [Step-by-step: common tasks](#14-step-by-step-common-tasks)
-15. [Messages and what to do](#15-messages-and-what-to-do)
-16. [Frequently asked questions](#16-frequently-asked-questions)
-17. [Glossary](#17-glossary)
+13. [People counting](#13-people-counting): how many people walked past each camera
+14. [Pages not available yet](#14-pages-not-available-yet)
+15. [Step-by-step: common tasks](#15-step-by-step-common-tasks)
+16. [Messages and what to do](#16-messages-and-what-to-do)
+17. [Frequently asked questions](#17-frequently-asked-questions)
+18. [Glossary](#18-glossary)
 
 ---
 
@@ -148,7 +149,7 @@ The red number next to **Alarms** in the sidebar is the number of **open alarms*
 
 ### What's on the page (top to bottom)
 
-**Status line**: a green dot and *Box clock connected* means the box's clock was read. An amber dot and *Box clock unavailable* means it wasn't (see [FAQ](#15-frequently-asked-questions)). Today's date is shown alongside.
+**Status line**: a green dot and *Box clock connected* means the box's clock was read. An amber dot and *Box clock unavailable* means it wasn't (see [FAQ](#17-frequently-asked-questions)). Today's date is shown alongside.
 
 **Summary cards**
 
@@ -573,18 +574,63 @@ Use the **On** switch on a rule to pause it without deleting it. **Edit** change
 
 ---
 
-## 13. Pages not available yet
+## 13. People counting
+
+**Events → People counting.** How many people walked past a camera, and how many different people that was, over any period. It needs the portal database, like Alarms; without it the page says what to set up.
+
+### Walk-pasts and different people
+
+- A **walk-past** is one person passing one camera once. The box takes several pictures of someone as they pass (a face and a body picture, often more than one of each); they all count as **one** walk-past. Use the **Walk-pasts** list at the bottom to see the pictures behind every number.
+- **Different people** is how many different individuals that was: a person is counted as **new** the first time they appear in the chosen period; when they go away and come back, they're **not counted again**. So the same person walking past twice is 2 walk-pasts but 1 person. Counting starts afresh with each period you pick (a person counted yesterday is new again in *Today*). The portal tells people apart by **comparing their clothing and faces** in the box's pictures (and, for people in the face library, by the box's recognition).
+- A **visit**: the same recognised person seen again on the same camera within 2 minutes (for example, someone stepped behind a pillar) counts once.
+
+> **Why "different people" says *estimate* and shows a range** (e.g. *≈ 7, likely 6–10*): the comparison isn't perfect. Ceiling cameras see faces from above, often half-hidden by a phone, so the portal relies mostly on **clothing** within a day, and on faces to recognise someone on another day. Two people dressed alike can be taken for one; one person under very different light (another camera) can look like two. The range shows how far off it could be. Walk-pasts with no usable picture aren't in the count; the line under the tiles says how many.
+>
+> Because clothes change from day to day, a period of several days counts a person once per day unless their face is clear enough to recognise, so **multi-day totals run higher than the truth**. Faces of new walk-pasts are compared within a few seconds; until then the page says they're *still being processed*.
+>
+> For a very long period (thousands of walk-pasts) the page asks you to pick a shorter one.
+
+**Strangers (walk-pasts)** counts passes the box compared with the face library and found no match. Strangers aren't told apart either, so this is a count of passes, not of different strangers.
+
+### Filters (top of the page)
+
+| Filter | What it does |
+|---|---|
+| **Cameras** | Tick one or more cameras. Untouched, it uses every camera included in counting (see *Camera settings*). |
+| **Period** | Today, Yesterday, Last 7 days, Last 30 days, or **Custom** (two dates, optional times). A custom "to" date without a time includes that whole day. |
+| **Hours** | Only these hours of each day, e.g. 09:00 to 17:00. A "to" earlier than "from" (22:00 to 05:00) runs **past midnight**. |
+| **Weekdays** | Only the ticked days, e.g. Mon–Fri. None ticked = every day. |
+
+Your filters are remembered in this browser. **Reset** goes back to *Today*, all cameras. With *Today* selected, the page refreshes every minute.
+
+### What's on the page
+
+1. **Number tiles**: walk-pasts (with how many had both a face and a body picture), different people, recognised people, strangers.
+2. **Over time**: **New people** (each person once, in the hour they first appeared; the bars add up to *different people*) or **Walk-pasts** (every pass, returns included). A bar per hour for short periods, per day for longer ones; the buttons switch between 15 minutes, hour and day. Hover a bar for its number.
+3. **Busy times**: a grid of weekdays × hours. The darker the square, the more people on an average day at that time. Averaged, so a period with three Mondays doesn't make Monday look three times busier. Striped squares are days not in the period.
+4. **By camera**: the numbers per camera.
+5. **Walk-pasts**: newest first, with the face and body pictures, the camera, the time and how long the person was in view. **Who** says **New person** (counted) or **Came back** (not counted again, with when they were first seen), and which person it was (*Person 5*, or the name if recognised). *Can't tell* means there was no usable picture to match.
+6. **Camera settings** (click to open): untick **Include in counting** to leave a camera out of the totals (for example a camera that mostly films an empty corridor). Its walk-pasts are still recorded, and picking it in the **Cameras** filter still shows them. **What counts** can limit a camera to people whose face was seen, or whose body was seen; *Everyone* is right for most cameras.
+
+### Good to know
+
+- Times are the box's clock. Hours and weekdays use the box's time zone.
+- The page counts what the cameras detected: someone the camera didn't detect (too far, back turned and body hidden) isn't counted.
+- It doesn't count people **entering or leaving**, or how many are inside right now; the box's records don't say which way someone walked.
+
+---
+
+## 14. Pages not available yet
 
 These pages are in the sidebar but show a placeholder for now:
 
 | Page | Planned purpose |
 |---|---|
-| **People counting** | Counts of people entering and leaving over time |
 | **Settings** | Portal and box settings |
 
 ---
 
-## 14. Step-by-step: common tasks
+## 15. Step-by-step: common tasks
 
 ### Daily check (2 minutes)
 
@@ -639,7 +685,7 @@ These pages are in the sidebar but show a placeholder for now:
 
 ---
 
-## 15. Messages and what to do
+## 16. Messages and what to do
 
 | Message | What it means | What to do |
 |---|---|---|
@@ -666,7 +712,7 @@ These pages are in the sidebar but show a placeholder for now:
 
 ---
 
-## 16. Frequently asked questions
+## 17. Frequently asked questions
 
 **Why does someone I deleted from People still show up in old records?**
 The box keeps old records after a person is deleted. The portal hides them on the Recognition page; you might still see them on the Captures page, which shows every capture.
@@ -691,7 +737,7 @@ Camera passwords are never shown in the portal. The sign-in is currently a demon
 
 ---
 
-## 17. Glossary
+## 18. Glossary
 
 | Term | Meaning |
 |---|---|

@@ -36,7 +36,7 @@ class Camera(SQLModel, table=True):
     name: str = Field(sa_type=String(100))                        # device_name, e.g. IPCAM-D3
     channel_type: int | None = Field(default=None, sa_type=SmallInteger)   # 1 video, 2 picture
     count_enabled: bool = True
-    count_basis: CountBasis = Field(default=CountBasis.FACE, sa_type=String(10))
+    count_basis: CountBasis = Field(default=CountBasis.MERGED, sa_type=String(10))
     last_synced_at: datetime | None = Field(default=None, sa_type=TIMESTAMPTZ)
     deleted_at: datetime | None = Field(default=None, sa_type=TIMESTAMPTZ)
     created_at: datetime = created_at_field()

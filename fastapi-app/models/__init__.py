@@ -36,8 +36,8 @@ from .alarms import (AlarmRule, AlarmRuleCamera, AlarmRuleRecipient, AlarmRuleSt
 from .base import TIMESTAMPTZ, utcnow
 from .counting import CountBucket, Sighting, StrangerProfile
 from .enums import (Channel, CountBasis, DedupeScope, EventKind, EventSource, InboxStatus,
-                    IncidentStatus, IngestStream, MatchMode, NotificationStatus, PersonSource, Severity,
-                    TargetType)
+                    IncidentStatus, IngestStream, MatchMode, NotificationStatus, PersonSource, RecognitionResult,
+                    Severity, TargetType)
 from .ingest import Event, IngestCursor, PushInbox
 from .reference import Box, Camera, Contact
 
@@ -54,7 +54,7 @@ __all__ = [
     # admin
     "AppSetting", "AuditLog",
     # enums
-    "EventKind", "EventSource", "IngestStream", "InboxStatus", "CountBasis", "PersonSource",
+    "EventKind", "EventSource", "IngestStream", "InboxStatus", "CountBasis", "PersonSource", "RecognitionResult",
     "Severity", "MatchMode", "DedupeScope", "TargetType", "IncidentStatus", "Channel",
     "NotificationStatus",
     # helpers

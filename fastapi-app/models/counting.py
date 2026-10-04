@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
 
 from .base import TIMESTAMPTZ, bigint_pk, created_at_field, one_of, updated_at_field
-from .enums import PersonSource
+from .enums import PersonSource, RecognitionResult
 
 
 class StrangerProfile(SQLModel, table=True):
@@ -46,6 +46,7 @@ class Sighting(SQLModel, table=True):
         CheckConstraint("local_hour BETWEEN 0 AND 23", name="local_hour"),
         CheckConstraint("iso_dow BETWEEN 1 AND 7", name="iso_dow"),
         one_of("person_source", PersonSource),
+        one_of("recognition_result", RecognitionResult),
         Index("uq_sightings_face_track", "camera_id", "local_date", "face_track_id", unique=True,
               postgresql_where=text("face_track_id IS NOT NULL")),
         Index("uq_sightings_body_track", "camera_id", "local_date", "body_track_id", unique=True,
@@ -61,6 +62,7 @@ class Sighting(SQLModel, table=True):
     )
 
     id: int | None = bigint_pk()
+    box_id: int = Field(foreign_key="boxes.id", ondelete="CASCADE")
     camera_id: int = Field(foreign_key="cameras.id")
     local_date: date = Field(sa_type=Date)                        # box-local, of first_seen_at
     local_hour: int = Field(sa_type=SmallInteger)                 # for "09:00-17:00 only" filters
@@ -74,6 +76,8 @@ class Sighting(SQLModel, table=True):
     person_source: PersonSource = Field(default=PersonSource.UNIDENTIFIED, sa_type=String(12))
     person_uuid: str | None = Field(default=None, sa_type=String(64))
     person_name: str | None = Field(default=None, sa_type=String(200))
+    # Split of walk-pasts into recognised / stranger / not compared, even without stranger grouping.
+    recognition_result: RecognitionResult | None = Field(default=None, sa_type=String(10))
     stranger_profile_id: int | None = Field(default=None, foreign_key="stranger_profiles.id",
                                             ondelete="SET NULL", sa_type=BigInteger)
     best_match_score: float | None = None
@@ -82,13 +86,17 @@ class Sighting(SQLModel, table=True):
     # The best face's fingerprint; kept so stranger grouping can be redone with a new threshold.
     face_embedding: list[float] | None = Field(default=None, sa_type=ARRAY(REAL))
     embedding_model: str | None = Field(default=None, sa_type=String(64))
+    # Whole-body (clothing) fingerprint: tells people apart within a day when faces are unclear.
+    body_embedding: list[float] | None = Field(default=None, sa_type=ARRAY(REAL))
+    body_embedding_model: str | None = Field(default=None, sa_type=String(64))
 
 
 class CountBucket(SQLModel, table=True):
     """Sightings per camera per 15 minutes: fast footfall charts over any range, kept forever
     (16 cameras x 96 buckets/day is ~560k rows a year). Only add-up-able numbers live here; unique
-    people can't be added across buckets, so they come from `sightings`. When two sightings are merged,
-    the writer subtracts the removed one from its bucket."""
+    people can't be added across buckets, so they come from `sightings`. The writer never adds or
+    subtracts: after each batch it recounts the touched buckets from `sightings` and `events`
+    (counting/builder.py), so merges and late records can't make the totals drift."""
     __tablename__ = "count_buckets"
     __table_args__ = (
         CheckConstraint("local_hour BETWEEN 0 AND 23", name="local_hour"),

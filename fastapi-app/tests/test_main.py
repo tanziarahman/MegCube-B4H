@@ -56,5 +56,7 @@ def test_database_errors_say_what_to_do():
     request = Request({"type": "http", "method": "GET", "path": "/api/alarms/rules", "headers": []})
     missing = asyncio.run(database_error(request, DBAPIError("select", {}, Orig("42P01"))))
     assert missing.status_code == 503 and "alembic upgrade head" in json.loads(missing.body)["detail"]
+    behind = asyncio.run(database_error(request, DBAPIError("select", {}, Orig("42703"))))
+    assert behind.status_code == 503 and "newer migration" in json.loads(behind.body)["detail"]
     other = asyncio.run(database_error(request, DBAPIError("select", {}, Orig("08006"))))
     assert json.loads(other.body)["detail"] == "The database is unreachable or refused the request."

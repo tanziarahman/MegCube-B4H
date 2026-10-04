@@ -86,6 +86,14 @@ BOX_TIMEZONE=Asia/Dhaka
 | `ALARM_POLL_OVERLAP_SECONDS` | `60` | Each poll re-reads this much of the previous window, so records the box saves late aren't missed. Raise it if the box clock runs behind this PC. |
 | `ALARM_MAX_RECIPIENTS` | `5` | Most email recipients per rule |
 | `ALARM_WORKERS` | `1` | `0` turns polling and emails off in this process (e.g. a second instance) |
+| `COUNT_PAIR_MAX_SECONDS` | `120` | People counting: a face track and its body track (face id − 1) are one walk-past when their first records are at most this far apart |
+| `COUNT_VISIT_GAP_SECONDS` | `120` | People counting: the same identified person on the same camera again within this gap is still one visit |
+| `FACE_MATCHING` | `1` | `0` turns face and body fingerprints off (different people is then the same as walk-pasts) |
+| `FACE_MODEL_DIR` | `fastapi-app/face_models` | Where the three model files are (`uv run python -m faces.download`) |
+| `PEOPLE_MATCH_THRESHOLD` / `PEOPLE_MATCH_RANGE` | `0.35` / `0.05` | How alike two walk-pasts must be (on average, group against group) to be one person; the shown range uses ± `PEOPLE_MATCH_RANGE`. Applies at once (grouping happens per request) |
+| `PEOPLE_BODY_WEIGHT` | `0.6` | Share of the body (clothing) similarity when both a face and a body can be compared |
+| `FACE_MIN_DETECTION_SCORE` / `FACE_MIN_PIXELS` / `BODY_MIN_PIXELS` | `0.85` / `40` / `64` | Faces less certain or smaller, and body pictures shorter, than this get no fingerprint |
+| `FACE_PER_CYCLE` / `PEOPLE_MAX_GROUPING` | `40` / `2000` | Walk-pasts fingerprinted per poll cycle; most walk-pasts grouped for one request |
 
 Generate an API key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
@@ -122,6 +130,19 @@ box alarm_history --poll every 5 s--> events --> rules --> incidents --> notific
 - `alarms/mailer.py` sends one email per recipient, with the snapshot attached, and retries failures (30 s, 1 min, 2 min…, 5 tries).
 - The pollers run inside the backend process: run **one** backend process (no `--workers N`).
 
+**People counting** uses the same events. In the same transaction, before the rules, `counting/builder.py` puts each new event into a **sighting** (one person passing one camera once): the box's repeated records of a track collapse into one, and face track `F` + body track `F − 1` on the same camera are merged (the box numbers them from one counter). The 15-minute totals in `count_buckets` are recounted from `sightings` after every batch, so they can't drift. Counting queries are in `counting/queries.py`, the routes in `routers/counting.py`.
+
+**Different people by face and clothing.** The box sends no identities, so the backend tells people apart itself. After each poll, `faces/worker.py` downloads the face and body pictures of each new walk-past from the box and computes two fingerprints with OpenCV: SFace for the face (`sightings.face_embedding`), YouTu ReID for the whole body, mostly clothing (`sightings.body_embedding`). It runs outside the alarm transaction, oldest first (the box rotates old pictures out); a picture with nothing usable is marked and not retried. For each request, `faces/grouping.py` groups the walk-pasts of the chosen period by average similarity (60 % body, 40 % face; bodies only within one day; two walk-pasts on camera together are never one person) and returns a range of people. One-time setup: `uv run python -m faces.download` (three files, ~146 MB, checked by SHA-256, into `face_models/`, which git ignores).
+
+Calibrated on this box's pictures on 2026-10-04 (checked by eye: about 6 people in 70 walk-pasts): faces alone gave 25 people, because ceiling-camera faces are small, tilted and often half-covered; body + face gives 7 (likely 6–10).
+
+Events saved before people counting existed have no sighting. Build them once (safe to re-run; it skips events that already have one):
+
+```bash
+uv run python -m counting.backfill                     # everything
+uv run python -m counting.backfill --since 2026-10-01  # only from this box-local day
+```
+
 **Schema changes:** edit `models/`, then `uv run alembic revision --autogenerate -m "what changed"`, review the file in `migrations/versions/`, and `uv run alembic upgrade head`. `uv run alembic check` tells you if the models and migrations differ.
 
 ## Project structure
@@ -134,9 +155,13 @@ fastapi-app/
 ├─ db.py              # database connection (Neon URL handling, sessions)
 ├─ models/            # database tables (SQLModel): reference, ingest, counting, alarms, admin
 ├─ alarms/            # box records -> events -> rules -> incidents -> emails (+ background workers)
+├─ counting/          # people counting: events -> sightings + 15-minute buckets, queries, backfill
+├─ faces/             # face and body fingerprints (OpenCV) and grouping them into different people
+├─ face_models/       # the three model files (not in git; uv run python -m faces.download)
 ├─ migrations/        # Alembic migrations (alembic.ini at the top)
 ├─ routers/
 │  ├─ alarms.py       # Alarms page: rules, recipients, incidents, status, test email
+│  ├─ counting.py     # People counting page: totals, series, busy times, sightings, camera settings
 │  ├─ devices.py      # Devices page: camera list + status, add, edit, delete
 │  ├─ preview.py      # Live view: camera list, RTSP → MJPEG stream (ffmpeg)
 │  ├─ recognition.py  # Recognition records, face-library person list
@@ -161,6 +186,7 @@ The full reference (parameters, response shapes, errors, and the box calls behin
 | `recognition.py` | `GET /api/recognition`, `DELETE /api/recognition/{alarm_id}`, `GET /api/people` |
 | `capture.py` | `GET /api/capture` |
 | `personnel.py` | `GET /api/personnel/groups`, `GET/POST /api/personnel`, `PUT/DELETE /api/personnel/{id}` |
+| `counting.py` | `GET /api/counting/summary`, `GET /api/counting/series`, `GET /api/counting/heatmap`, `GET /api/counting/sightings`, `GET /api/counting/cameras`, `PATCH /api/counting/cameras/{id}` |
 | `alarms.py` | `GET /api/alarms/status`, `GET /api/alarms/cameras`, `GET/POST /api/alarms/contacts`, `PUT/DELETE /api/alarms/contacts/{id}`, `POST /api/alarms/test-email`, `GET/POST /api/alarms/rules`, `GET/PUT/DELETE /api/alarms/rules/{id}`, `PATCH /api/alarms/rules/{id}/enabled`, `GET /api/alarms/incidents`, `GET /api/alarms/incidents/{id or public id}`, `PATCH /api/alarms/incidents/{id}` |
 | `timeplan.py` | `GET /api/timeplans/time`, `GET /api/timeplans/regular`, `GET /api/timeplans/festival`, `POST /api/timeplans`, `PUT/DELETE /api/timeplans/{plan_id}`, `DELETE /api/timeplans/stream-subscriptions` |
 
@@ -185,7 +211,7 @@ All box traffic goes through one `B4HClient`. In short:
 ```bash
 cd fastapi-app
 uv sync                 # installs pytest (dev dependency group)
-uv run pytest           # about 310 tests, under a minute
+uv run pytest           # about 400 tests, under a minute
 uv run pytest -v tests/test_devices.py        # one file
 uv run pytest -k "password"                  # tests whose name matches
 ```
@@ -194,7 +220,7 @@ uv run pytest -k "password"                  # tests whose name matches
 - An unexpected box call fails the test, so a route can't silently hit an endpoint nobody planned for.
 - The API-key check is off in tests by default. `test_access.py` turns it on.
 - Sample box data in `conftest.py` (`DEVICE_CONFIG`, `DEVICE_STATE`, `TASK_LIST`) is copied from real responses.
-- **Alarm database tests** need a real PostgreSQL: set `TEST_DATABASE_URL` to an **empty, throwaway** database (its tables are dropped and recreated), e.g. a local Postgres or a Neon branch. Without it they are skipped.
+- **Alarm and counting database tests** need a real PostgreSQL: set `TEST_DATABASE_URL` to an **empty, throwaway** database (its tables are dropped and recreated), e.g. a local Postgres or a Neon branch. Without it they are skipped.
 
   ```bash
   TEST_DATABASE_URL=postgresql://postgres@localhost:5432/b4h_test uv run pytest
@@ -217,6 +243,9 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_models.py` | Every table compiles to PostgreSQL; key unique constraints and indexes |
 | `test_alarm_rules.py` | Box record → event, overnight time windows, rule matching (who, camera, score, liveness, time zone), email content, retry gaps |
 | `test_alarms_db.py` | (needs `TEST_DATABASE_URL`) poll → events → alarm → queued emails, no duplicates on re-poll, cooldown grouping, per-track alarms, late events, box errors, email sending and retries, all `/api/alarms` routes |
+| `test_counting_builder.py` | (needs `TEST_DATABASE_URL`) face + body pairing in one batch, across polls, in either order and across midnight; merging two halves; the 2-minute limit; many records of one track; other cameras; recognitions and strangers; re-polls change nothing; bucket recounts; backfill; alarms still fire |
+| `test_faces.py` | Grouping: body + face weighing, clothes only within a day, people seen together never merged, the range, the too-many limit; real models refuse unusable pictures (skipped without the models); (needs `TEST_DATABASE_URL`) one fingerprint per walk-past, no retries, missing pictures, merges keep the fingerprint, a face failure doesn't stop polling, the summary's estimate per period and camera |
+| `test_counting_api.py` | (most need `TEST_DATABASE_URL`) totals, visits and different people; hours (incl. past midnight), weekday and camera filters; counting basis; zero-filled series; heatmap averages; sightings list; camera settings + audit; `422` for bad input; `503` without a database |
 | `test_timeplan.py` | Box clock and its fallback, plan list/create/update/delete payloads, id mismatch refused, stream-subscription route not shadowed by `{plan_id}` |
 
 **Not covered yet:** `PUT /api/devices/{id}` (device edit) has no tests. Add them next.

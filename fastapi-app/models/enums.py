@@ -28,8 +28,8 @@ class InboxStatus(str, Enum):
 
 
 class CountBasis(str, Enum):
-    # Which sightings count as people on a camera, until face/body binding is confirmed on the box.
-    MERGED = "merged"                # face + body tracks merged into one sighting (needs binding)
+    # Which sightings count as people on a camera.
+    MERGED = "merged"                # every sighting (face + body track of one person merged into one)
     FACE = "face"                    # only sightings with a face track (identity known or comparable)
     BODY = "body"                    # only sightings with a body track (catches people facing away)
 
@@ -37,7 +37,14 @@ class CountBasis(str, Enum):
 class PersonSource(str, Enum):
     RECOGNIZED = "recognized"        # matched a face-library person: person_key = "p:<person_uuid>"
     STRANGER = "stranger"            # grouped by face comparison: person_key = "s:<stranger_profile_id>"
-    UNIDENTIFIED = "unidentified"    # no usable face: person_key = "t:<camera_id>:<local_date>:<f|b><track_id>"
+    UNIDENTIFIED = "unidentified"    # nobody identified: person_key = "t:<camera_id>:<local_date>:b<body_track_id>",
+                                     # or "...:f<face_track_id>" when the sighting has no body track
+
+
+class RecognitionResult(str, Enum):
+    # What the box's face comparison said about a sighting (NULL = no comparison record arrived).
+    MATCHED = "matched"              # a face-library person (sets person_source = recognized)
+    STRANGER = "stranger"            # compared, nobody matched; NOT grouped, so not a separate person
 
 
 class Severity(str, Enum):

@@ -10,7 +10,8 @@ import db
 from alarms import worker as alarm_worker
 from b4h import B4HError
 from core import box, check_access, log
-from routers import alarms, capture, common, dashboard, devices, personnel, preview, recognition, timeplan
+from routers import (alarms, capture, common, counting, dashboard, devices, personnel, preview, recognition,
+                     timeplan)
 
 
 @asynccontextmanager
@@ -51,9 +52,13 @@ async def box_unreachable(request: Request, exc: httpx.TransportError):
 @app.exception_handler(DBAPIError)
 async def database_error(request: Request, exc: DBAPIError):
     log.warning("Database error on %s: %r", request.url.path, exc.orig)
-    if getattr(exc.orig, "sqlstate", None) == "42P01":     # undefined_table: migrations weren't run
+    sqlstate = getattr(exc.orig, "sqlstate", None)
+    if sqlstate == "42P01":     # undefined_table: migrations weren't run
         return JSONResponse(status_code=503, content={"detail": (
             "The database has no tables yet. In fastapi-app run: uv run alembic upgrade head")})
+    if sqlstate == "42703":     # undefined_column: the code is newer than the database
+        return JSONResponse(status_code=503, content={"detail": (
+            "The database is missing a newer migration. In fastapi-app run: uv run alembic upgrade head")})
     return JSONResponse(status_code=503, content={"detail": "The database is unreachable or refused the request."})
 
 
@@ -63,5 +68,5 @@ async def root():
 
 
 # Every /api route needs the API key (when API_KEY is set in .env); see core.check_access.
-for r in (recognition, capture, common, preview, personnel, devices, timeplan, dashboard, alarms):
+for r in (recognition, capture, common, preview, personnel, devices, timeplan, dashboard, alarms, counting):
     app.include_router(r.router, dependencies=[Depends(check_access)])
