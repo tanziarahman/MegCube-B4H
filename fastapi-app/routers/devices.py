@@ -6,6 +6,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel, Field
 
+import cache
 from core import box
 
 router = APIRouter()
@@ -122,6 +123,7 @@ async def create_device(body: DeviceIn):
             "proto": body.protocol,
             "rtsp_param": {"user": user, "password": password, "url": url},
         })
+    await cache.delete(cache.key("dash", "health"))
     return {"device_id": device_id}
 
 
@@ -172,6 +174,7 @@ async def update_device(body: DeviceUpdate, device_id: int = Path(..., ge=1)):
         "proto": body.protocol,
         "rtsp_param": {"user": user, "password": password, "url": url},
     })
+    await cache.delete(cache.key("dash", "health"))
     return {"updated": device_id}
 
 
@@ -189,4 +192,5 @@ async def delete_device(device_id: int = Path(..., ge=1)):
     if not any(d.get("device_id") == device_id for d in config):
         raise HTTPException(404, f"Device #{device_id} is not configured on the box")
     await box.call("DELETE", "/device_access/device", {"device_id": device_id})
+    await cache.delete(cache.key("dash", "health"))
     return {"deleted": device_id}

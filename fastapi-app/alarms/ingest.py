@@ -15,7 +15,9 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 import counting
+import cache
 from core import BOX_BASE_URL, BOX_MAX_PAGE_SIZE, BOX_TIMEZONE_NAME, RECOG_MAJOR, alarm_history_page, box
+from counting.settings import box_tz
 from models import Box, Camera, Event, EventSource, IngestCursor, IngestStream
 
 from . import engine
@@ -161,7 +163,22 @@ async def poll_stream(sessions, box_id: int, stream: IngestStream, now: datetime
             cursor.last_error = None
             cursor.events_ingested = (cursor.events_ingested or 0) + len(new_events)
             session.add(cursor)
+    await _forget_dashboard_days(new_events)
     return len(new_events)
+
+
+async def _forget_dashboard_days(events: list[Event]) -> None:
+    """Late records change past dashboard numbers: drop their copy and the next day's copy."""
+    if not events or not cache.enabled():
+        return
+    tz = box_tz()
+    today = datetime.now(timezone.utc).astimezone(tz).date()
+    keys = []
+    for day in {e.occurred_at.astimezone(tz).date() for e in events}:
+        for d in (day, day + timedelta(days=1)):
+            if d < today or (d == today and day < today):
+                keys.append(cache.key("dash", "activity", d.isoformat(), "database"))
+    await cache.delete(*keys)
 
 
 async def _record_failure(sessions, box_id: int, stream: IngestStream, now: datetime, exc: Exception) -> None:

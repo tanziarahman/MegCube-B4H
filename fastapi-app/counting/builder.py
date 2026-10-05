@@ -15,6 +15,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from alarms.rules import plain
+from dashboard_data.stats import LOW_CONFIDENCE, LOW_LIVENESS, rebuild_days
 from models import Event, EventKind, Incident, PersonSource, RecognitionResult, Sighting
 
 from .settings import BUCKET, PAIR_MAX, box_tz
@@ -113,7 +114,8 @@ class _Batch:
 
 async def attach(session: AsyncSession, events: list[Event], box_id: int) -> None:
     """Put each new event into its sighting (creating or merging sightings), set
-    events.sighting_id, then rebuild the 15-minute buckets those sightings touch."""
+    events.sighting_id, then rebuild the 15-minute buckets those sightings touch and the dashboard's
+    day totals (daily_stats)."""
     if not events:
         return
     batch = _Batch(session, box_tz())
@@ -127,6 +129,7 @@ async def attach(session: AsyncSession, events: list[Event], box_id: int) -> Non
         await _attach_one(batch, e, box_id)
     await session.flush()
     await rebuild_buckets(session, batch.touched, batch.tz)
+    await rebuild_days(session, box_id, {e.occurred_at.astimezone(batch.tz).date() for e in events})
 
 
 async def _attach_one(batch: _Batch, e: Event, box_id: int) -> None:
@@ -242,15 +245,34 @@ WITH s AS (
     SELECT count(*) AS n, count(face_track_id) AS f, count(body_track_id) AS b
     FROM sightings WHERE camera_id = :camera_id AND first_seen_at >= :start AND first_seen_at < :end
 ), e AS (
-    SELECT count(*) AS n FROM events WHERE camera_id = :camera_id AND occurred_at >= :start AND occurred_at < :end
+    SELECT count(*) AS n,
+           count(*) FILTER (WHERE kind = 'matched') AS matched,
+           count(*) FILTER (WHERE kind = 'stranger') AS stranger,
+           count(*) FILTER (WHERE kind = 'face_capture') AS face_capture,
+           count(*) FILTER (WHERE kind = 'body_capture') AS body_capture,
+           count(*) FILTER (WHERE kind IN ('matched', 'stranger') AND match_score < :low_confidence) AS low_conf,
+           count(*) FILTER (WHERE kind IN ('matched', 'stranger') AND liveness_score < :low_liveness) AS low_live,
+           coalesce(sum(match_score) FILTER (WHERE kind IN ('matched', 'stranger')), 0) AS score_sum,
+           count(match_score) FILTER (WHERE kind IN ('matched', 'stranger')) AS score_n
+    FROM events WHERE camera_id = :camera_id AND occurred_at >= :start AND occurred_at < :end
 )
 INSERT INTO count_buckets (camera_id, bucket_start, local_date, local_hour, local_minute, iso_dow,
-                           sightings, face_sightings, body_sightings, events, updated_at)
-SELECT :camera_id, :start, :local_date, :local_hour, :local_minute, :iso_dow, s.n, s.f, s.b, e.n, now()
+                           sightings, face_sightings, body_sightings, events,
+                           matched_events, stranger_events, face_capture_events, body_capture_events,
+                           low_confidence_events, low_liveness_events, identity_score_sum,
+                           identity_score_count, updated_at)
+SELECT :camera_id, :start, :local_date, :local_hour, :local_minute, :iso_dow, s.n, s.f, s.b, e.n,
+       e.matched, e.stranger, e.face_capture, e.body_capture, e.low_conf, e.low_live, e.score_sum, e.score_n,
+       now()
 FROM s, e
 ON CONFLICT (camera_id, bucket_start) DO UPDATE SET
     sightings = excluded.sightings, face_sightings = excluded.face_sightings,
-    body_sightings = excluded.body_sightings, events = excluded.events, updated_at = excluded.updated_at
+    body_sightings = excluded.body_sightings, events = excluded.events,
+    matched_events = excluded.matched_events, stranger_events = excluded.stranger_events,
+    face_capture_events = excluded.face_capture_events, body_capture_events = excluded.body_capture_events,
+    low_confidence_events = excluded.low_confidence_events, low_liveness_events = excluded.low_liveness_events,
+    identity_score_sum = excluded.identity_score_sum, identity_score_count = excluded.identity_score_count,
+    updated_at = excluded.updated_at
 """)
 # A bucket left with nothing in it (its only sighting merged into an earlier one, no records) goes.
 _DROP_EMPTY = text("DELETE FROM count_buckets WHERE camera_id = :camera_id AND bucket_start = :start "
@@ -264,6 +286,7 @@ async def rebuild_buckets(session: AsyncSession, touched: set[tuple[int, datetim
     for camera_id, start in sorted(touched):
         local = start.astimezone(tz)
         params = {"camera_id": camera_id, "start": start, "end": start + BUCKET, "local_date": local.date(),
-                  "local_hour": local.hour, "local_minute": local.minute, "iso_dow": local.isoweekday()}
+                  "local_hour": local.hour, "local_minute": local.minute, "iso_dow": local.isoweekday(),
+                  "low_confidence": LOW_CONFIDENCE, "low_liveness": LOW_LIVENESS}
         await session.exec(_REBUILD, params=params)
         await session.exec(_DROP_EMPTY, params={"camera_id": camera_id, "start": start})

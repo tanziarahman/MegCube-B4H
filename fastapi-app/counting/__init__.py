@@ -4,6 +4,11 @@ the 15-minute totals in `count_buckets` up to date. Queries for the counting pag
 Runs inside the alarm ingest transaction (alarms/ingest.py), so only genuinely new events are counted
 and a crash rolls back events and sightings together.
 """
-from .builder import attach
-
 __all__ = ["attach"]
+
+
+def __getattr__(name):
+    if name == "attach":
+        from .builder import attach
+        return attach
+    raise AttributeError(name)
