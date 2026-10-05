@@ -78,11 +78,11 @@ export default function DashboardView() {
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
 
-  const load = async (initial = false) => {
+  const load = async (initial = false, fresh = false) => {
     if (initial) setLoading(true); else setRefreshing(true);
     setError(null);
     try {
-      setData(await fetchDashboardSummary());
+      setData(await fetchDashboardSummary(undefined, { fresh }));
       setRefreshedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load dashboard');
@@ -114,9 +114,9 @@ export default function DashboardView() {
           <span className={`h-2 w-2 rounded-full ${data.health.clock.source === 'box' ? 'bg-ok' : 'bg-warn'}`} />
           <span>{data.health.clock.source === 'box' ? 'Box clock connected' : 'Box clock unavailable'}</span>
           <span className="hidden text-line sm:inline">|</span>
-          <span>{data.date} · refreshes every 45 seconds</span>
+          <span>{data.date} · refreshes every 45 seconds{data.meta ? ` · from ${data.meta.source === 'database' ? 'portal database' : 'box'}` : ''}</span>
         </div>
-        <button onClick={() => load()} disabled={refreshing} title="Refresh dashboard" className="flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] font-medium hover:bg-ground disabled:opacity-50">
+        <button onClick={() => load(false, true)} disabled={refreshing} title="Refresh dashboard" className="flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-[12px] font-medium hover:bg-ground disabled:opacity-50">
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>

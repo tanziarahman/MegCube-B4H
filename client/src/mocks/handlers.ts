@@ -122,6 +122,13 @@ export const sampleDashboard = {
     { id: 2, name: 'Loading bay', online: false, state_code: 3, pulling_stream: false, task: null },
   ],
   attention: [{ severity: 'critical', type: 'offline_camera', message: 'Loading bay is offline', device_id: 2 }],
+  meta: {
+    source: 'box',
+    fallback_reason: null,
+    coverage_start: null,
+    cache: { health: 'off', activity: 'off' },
+    ingest_last_success_at: null,
+  },
 };
 
 export const sampleAlarmStatus = {

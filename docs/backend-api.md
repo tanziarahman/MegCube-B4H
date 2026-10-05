@@ -134,6 +134,7 @@ Everything the Dashboard page shows, in one response: today's totals, comparison
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `date` | `YYYY-MM-DD` | no | today in `BOX_TIMEZONE` | The box-local day to summarise |
+| `fresh` | boolean | no | `false` | Skip cached health and activity reads; the result is still written to Redis. The Dashboard Refresh button uses `fresh=1`. |
 
 **Response `200`**
 
@@ -178,7 +179,14 @@ Everything the Dashboard page shows, in one response: today's totals, comparison
   ],
   "attention": [
     { "severity": "critical", "type": "offline_camera", "message": "Loading bay is offline", "device_id": 2 }
-  ]
+  ],
+  "meta": {
+    "source": "database",
+    "fallback_reason": null,
+    "coverage_start": "2026-09-29",
+    "cache": { "health": "hit", "activity": "miss" },
+    "ingest_last_success_at": "2026-09-29T08:30:00+00:00"
+  }
 }
 ```
 
@@ -187,9 +195,9 @@ Everything the Dashboard page shows, in one response: today's totals, comparison
 | Field | Meaning |
 |---|---|
 | `health.clock.source` | `"box"` if both box time endpoints answered, otherwise `"unavailable"` (then `time` / `time_zone` may be `null`) |
-| `activity.matched` / `strangers` / `captures` | **Exact** totals for the day, from the box's `total_count` |
-| `activity.face_captures` / `body_captures` | Counted from the records read (see `capture_breakdown_limited`) |
-| `activity.capture_breakdown_limited` | `true` if there were more than 5,000 captures, so the face/body split covers only the first 5,000 |
+| `activity.matched` / `strangers` / `captures` | Exact totals for the day, from PostgreSQL when covered, otherwise the box's `total_count` |
+| `activity.face_captures` / `body_captures` | Database counts face/body events; box mode counts records read (see `capture_breakdown_limited`) |
+| `activity.capture_breakdown_limited` | `true` only in box mode when there were more than 5,000 captures; database mode is never sampled |
 | `activity.previous_*` | Yesterday's totals, for "vs yesterday" |
 | `insights.peak_hour` | Hour (0–23, box time) with most matched + stranger records; `null` if none |
 | `insights.average_match_score` | Mean similarity of matched + stranger records (0–100); `null` if none had a score |
@@ -204,7 +212,11 @@ Everything the Dashboard page shows, in one response: today's totals, comparison
 | `insights.analysis_sampled` | How many records the trend figures are based on |
 | `insights.analysis_limited` | `true` if any category hit the 5,000-record cap: trend figures use a sample, totals stay exact |
 | `devices[]` | One row per camera: `online` = box state `0`; `pulling_stream` = any channel pulling; `task` = analysis task name or `null` |
-| `attention[]` | Problems, critical first. `type` is one of `offline_camera` (critical), `stream_not_pulling`, `no_task`, `clock_unavailable` (all warning). |
+| `attention[]` | Problems, critical first. `type` is one of `offline_camera` (critical), `stream_not_pulling`, `no_task`, `clock_unavailable`, or database-today `ingest_lagging` (warnings). |
+| `meta.source` | `"database"` for dates covered by ingested events, otherwise `"box"` |
+| `meta.fallback_reason` | `"database unavailable"` when auto mode had to use the box after a database failure; otherwise `null` |
+| `meta.cache` | Cache state for health and activity: `hit`, `miss`, `bypass`, or `off` |
+| `meta.ingest_last_success_at` | Last successful ingest time for a database-served today; otherwise `null` |
 
 Scores the box sends as fractions (0–1) are converted to 0–100.
 
@@ -215,9 +227,11 @@ Scores the box sends as fractions (0–1) are converted to 0–100.
 | `422` | `date` isn't `YYYY-MM-DD`. Nothing is sent to the box. |
 | `502` / `503` / `504` | See [Errors](#13-errors) |
 
-**Box calls (in order):** `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`; then `alarm_history` paged (30 per call, up to 5,000 records) for today's matched, strangers and captures; then one `alarm_history` call (size 1) each for yesterday's totals.
+**Box calls:** health always uses `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`, cached for 15 seconds. A database-served activity date makes no `alarm_history` calls; it reads `count_buckets`, `daily_stats`, and `events` from PostgreSQL. Uncovered dates use the original paged `alarm_history` computation.
 
-> **Performance:** the box answers one request at a time, so a busy day can mean hundreds of box calls. This is the slowest endpoint. The Dashboard page refreshes it every 45 s.
+> **Performance:** Redis hits avoid all loaders. A database cache miss makes five health box calls plus small sequential PostgreSQL queries; the 45-second frontend refresh does not bypass cache. Set `DASHBOARD_SOURCE=box` or empty `REDIS_URL` as a rollback.
+
+Database mode intentionally differs from box mode: captures exclude structure-only records, analysis is not sampled, top people come from matched events only, and deleted box recognition records remain in portal history.
 
 ---
 

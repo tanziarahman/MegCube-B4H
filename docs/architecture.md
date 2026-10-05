@@ -175,7 +175,7 @@ The box's own live view needs a Windows browser plugin. The portal works around 
 
 | Portal page | Backend routes | Box endpoints |
 |---|---|---|
-| **Dashboard** `/` | `GET /api/dashboard/summary` | `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`, `alarm_history` (today + yesterday) |
+| **Dashboard** `/` | `GET /api/dashboard/summary` | box health: `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info` (cached 15 s); activity: database `count_buckets`, `daily_stats`, `events`, with box `alarm_history` only before database coverage |
 | **Live view** `/live` | `GET /api/preview/cameras`, `GET /api/preview/{id}/stream`, `GET /api/recognition`, `GET /api/people`, `GET /api/image` | `device_config`, `device_state`, `task_list`, RTSP (ffmpeg), `alarm_history`, `person/query`, `get_image` |
 | **Recognition** `/recognition` | `GET /api/recognition`, `DELETE /api/recognition/{id}`, `GET /api/people`, `GET /api/devices`, `GET /api/image` | `alarm_history` (query, delete), `person/query`, `device_config`, `get_image` |
 | **Captures** `/captures` | `GET /api/capture`, `GET /api/devices`, `GET /api/image` | `alarm_history` (with `structure` entry), `device_config`, `get_image` |
@@ -185,6 +185,11 @@ The box's own live view needs a Windows browser plugin. The portal works around 
 | **Alarms** `/alarms`, `/alarms/{id}` | `/api/alarms/*` (rules, contacts, incidents, status, test email) | none directly; the background worker uses `alarm_history` (recognition + capture queries) and `device_config`, and `get_image` for email snapshots |
 | **People counting** `/counting` | `/api/counting/*` (summary, series, heatmap, sightings, camera settings), `GET /api/image` | none directly; built from the events the alarm worker stores (`alarm_history`), plus `get_image` for pictures |
 | **Settings** | none (placeholder page) | not captured yet |
+
+Dashboard health and activity are separate optional Redis read-through cache entries. Redis hits
+avoid the loaders; misses use PostgreSQL for covered dates and retain the original box computation
+for uncovered dates. Redis failures are fail-open, with a short circuit-breaker pause, so an outage
+slows the portal only by the normal uncached path.
 
 ---
 

@@ -64,10 +64,23 @@ export interface DashboardSummary {
   };
   devices: DashboardDevice[];
   attention: { severity: string; type: string; message: string; device_id?: number | null }[];
+  meta?: {
+    source: 'database' | 'box';
+    fallback_reason?: string | null;
+    coverage_start?: string | null;
+    cache?: { health: string; activity: string };
+    ingest_last_success_at?: string | null;
+  };
 }
 
-export async function fetchDashboardSummary(date?: string): Promise<DashboardSummary> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+export async function fetchDashboardSummary(
+  date?: string,
+  options: { fresh?: boolean } = {},
+): Promise<DashboardSummary> {
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  if (options.fresh) params.set('fresh', '1');
+  const query = params.toString() ? `?${params.toString()}` : '';
   const response = await fetch(`/api/dashboard/summary${query}`, { cache: 'no-store' });
   const body = await response.json().catch(() => null) as { detail?: unknown } | null;
   if (!response.ok) {

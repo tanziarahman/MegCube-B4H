@@ -55,6 +55,13 @@ BOX_TIMEZONE=Asia/Dhaka
 # Alarms (optional; see "Database and alarms" below)
 # DATABASE_URL=postgresql://user:password@ep-xxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
 # DATABASE_URL_DIRECT=postgresql://user:password@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+# REDIS_URL=redis://localhost:6379/0
+# REDIS_PREFIX=b4h
+# DASHBOARD_HEALTH_CACHE_SECONDS=15
+# DASHBOARD_TODAY_CACHE_SECONDS=15
+# DASHBOARD_PAST_CACHE_SECONDS=3600
+# DASHBOARD_SOURCE=auto
+# DASHBOARD_INGEST_LAG_SECONDS=120
 # SMTP_HOST=smtp.gmail.com
 # SMTP_USER=alarms@yourdomain.com
 # SMTP_PASSWORD=app-password
@@ -77,6 +84,13 @@ BOX_TIMEZONE=Asia/Dhaka
 | `MAX_STREAMS` | `16` | Most live videos running at once (`503` above it) |
 | `DATABASE_URL` | (empty = alarms off) | PostgreSQL (Neon) connection string, pooled host. Without it the portal works as before and `/api/alarms/*` answers `503`. |
 | `DATABASE_URL_DIRECT` | (DATABASE_URL) | Neon's direct (non-pooler) host, used by Alembic migrations |
+| `REDIS_URL` | (empty = cache off) | Optional Redis URL for the dashboard read-through cache |
+| `REDIS_PREFIX` | `b4h` | Redis namespace prefix |
+| `DASHBOARD_HEALTH_CACHE_SECONDS` | `15` | Health cache TTL |
+| `DASHBOARD_TODAY_CACHE_SECONDS` | `15` | Activity cache TTL for today and future dates |
+| `DASHBOARD_PAST_CACHE_SECONDS` | `3600` | Activity cache TTL for past dates |
+| `DASHBOARD_SOURCE` | `auto` | `auto`, `database`, or `box` activity source |
+| `DASHBOARD_INGEST_LAG_SECONDS` | `120` | Ingest delay before the dashboard shows a warning |
 | `SMTP_HOST` / `SMTP_PORT` | (empty) / `587` (`465` with ssl) | Email server for alarm emails. Without `SMTP_HOST` and `SMTP_FROM`, alarms are recorded and their emails wait in the queue. |
 | `SMTP_USER` / `SMTP_PASSWORD` | (empty) | SMTP login (for Gmail: an app password) |
 | `SMTP_FROM` / `SMTP_FROM_NAME` | `SMTP_USER` / `B4H Portal` | Sender address and name |
@@ -94,6 +108,22 @@ BOX_TIMEZONE=Asia/Dhaka
 | `PEOPLE_BODY_WEIGHT` | `0.6` | Share of the body (clothing) similarity when both a face and a body can be compared |
 | `FACE_MIN_DETECTION_SCORE` / `FACE_MIN_PIXELS` / `BODY_MIN_PIXELS` | `0.85` / `40` / `64` | Faces less certain or smaller, and body pictures shorter, than this get no fingerprint |
 | `FACE_PER_CYCLE` / `PEOPLE_MAX_GROUPING` | `40` / `2000` | Walk-pasts fingerprinted per poll cycle; most walk-pasts grouped for one request |
+
+### Cache (Redis, optional)
+
+The dashboard caches live health for 15 seconds and activity numbers for 15 seconds today or one
+hour for past dates. Coverage metadata is cached for five minutes. Redis is read-through and
+fail-open: an outage logs one warning, pauses cache commands for 30 seconds, and the dashboard
+continues against the database or box. The backend must run as one process.
+
+For local development on Windows, use Docker Desktop:
+
+```bash
+docker run -d --name b4h-redis -p 6379:6379 redis:7-alpine
+```
+
+Memurai or Redis in WSL works as well. Set `REDIS_URL=redis://localhost:6379/0` and restart the
+backend. To roll back caching, empty `REDIS_URL`.
 
 Generate an API key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
@@ -113,8 +143,9 @@ Alarms are the portal's own feature: the box's licensed alarm algorithms aren't 
 
 1. Create a project on [Neon](https://neon.tech) in the region nearest the box (for Dhaka: Singapore). Copy the **pooled** connection string into `DATABASE_URL` and the **direct** one into `DATABASE_URL_DIRECT`.
 2. Create the tables: `uv run alembic upgrade head`
-3. Set the `SMTP_*` variables and `PORTAL_URL`, then restart the backend.
-4. On the **Alarms** page: add recipients, send a test email, create a rule.
+3. Fill dashboard counts for existing events: `uv run python -m dashboard_data.rebuild`
+4. Set the `SMTP_*` variables and `PORTAL_URL`, then restart the backend.
+5. On the **Alarms** page: add recipients, send a test email, create a rule.
 
 **How it works:**
 
@@ -153,7 +184,9 @@ fastapi-app/
 ├─ core.py            # box client, config from .env, time-zone handling, people cache, API-key check
 ├─ b4h.py             # B4HClient: login (lockout-safe), session renewal, call/upload/get_bytes
 ├─ db.py              # database connection (Neon URL handling, sessions)
+├─ cache.py           # optional Redis read-through cache
 ├─ models/            # database tables (SQLModel): reference, ingest, counting, alarms, admin
+├─ dashboard_data/    # dashboard stats, database queries, box fallback and rebuild CLI
 ├─ alarms/            # box records -> events -> rules -> incidents -> emails (+ background workers)
 ├─ counting/          # people counting: events -> sightings + 15-minute buckets, queries, backfill
 ├─ faces/             # face and body fingerprints (OpenCV) and grouping them into different people
@@ -237,6 +270,8 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_preview.py` | Camera list, ffmpeg start/stop, sub vs main stream, stream limit, missing ffmpeg, bad params |
 | `test_recognition.py` | Box payload, paging, validation, empty pages, 502/503/504 mapping, delete, `/api/people` paging and cache |
 | `test_dashboard.py` | Summary totals, people-flow counts, attention items (offline camera, stream not pulling), bad date refused before any box call |
+| `test_cache.py` | Redis round trips, TTLs, fail-open behavior and single-flight loading |
+| `test_dashboard_db.py` | (needs `TEST_DATABASE_URL`) stored dashboard counts, coverage, database source and fallback |
 | `test_capture.py` | Target-type mapping, record flattening, missing fields, paging, errors |
 | `test_personnel.py` | Groups, list, add/edit/delete, Bangla names, photo size limit, group-binding failure |
 | `test_common.py` | Image proxy: path whitelist, content types, fallbacks, session expiry, 404s |
@@ -249,6 +284,13 @@ uv run pytest -k "password"                  # tests whose name matches
 | `test_timeplan.py` | Box clock and its fallback, plan list/create/update/delete payloads, id mismatch refused, stream-subscription route not shadowed by `{plan_id}` |
 
 **Not covered yet:** `PUT /api/devices/{id}` (device edit) has no tests. Add them next.
+
+### Dashboard troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `Redis unavailable; caching paused` | Redis is optional; check `REDIS_URL`, connectivity, and the Redis service. The dashboard remains available without it. |
+| Dashboard says “from box” although the database is set | The requested date is before the database coverage start, or `DASHBOARD_SOURCE=box` is forcing the fallback. |
 
 **Adding a test:** use the `client` and `fake_box` fixtures, set the replies your route needs, call the route, then assert on the response **and** on `fake_box.calls`.
 
