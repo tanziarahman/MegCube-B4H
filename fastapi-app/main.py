@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 
+import cache
 import db
 from alarms import worker as alarm_worker
 from b4h import B4HError
@@ -25,10 +26,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         # Box offline/rebooting: start anyway, the first request logs in again.
         log.warning("B4H login at startup failed (%r); will retry on first request", e)
+    await cache.connect()
     alarm_worker.start()          # box polling + alarm emails (only when DATABASE_URL is set)
     yield
     await alarm_worker.stop()
     await db.dispose()
+    await cache.close()
     await box.close()
 
 

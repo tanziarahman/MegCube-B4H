@@ -10,6 +10,7 @@ Run from the fastapi-app folder:
 """
 import os
 import sys
+import time
 
 import httpx
 import pytest
@@ -22,10 +23,70 @@ import core  # noqa: E402
 from core import box  # noqa: E402
 from main import app  # noqa: E402
 import db  # noqa: E402
+import cache  # noqa: E402
 
 # Tests never use the DATABASE_URL from .env (your real database): only TEST_DATABASE_URL, via the
 # `database` fixture below. Without it, the app behaves as if no database is configured.
 db.DATABASE_URL = ""
+cache.REDIS_URL = ""
+cache.configure(None)
+
+
+class FakeRedis:
+    def __init__(self):
+        self.data: dict[str, tuple[str, float | None]] = {}
+        self.calls = 0
+        self.fail = False
+
+    def _call(self):
+        self.calls += 1
+        if self.fail:
+            raise ConnectionError("down")
+
+    async def get(self, name):
+        self._call()
+        entry = self.data.get(name)
+        if entry is None:
+            return None
+        value, expires = entry
+        if expires is not None and time.monotonic() >= expires:
+            self.data.pop(name, None)
+            return None
+        return value
+
+    async def set(self, name, value, px=None):
+        self._call()
+        expires = time.monotonic() + px / 1000 if px is not None else None
+        self.data[name] = (value, expires)
+        return True
+
+    async def delete(self, *names):
+        self._call()
+        for name in names:
+            self.data.pop(name, None)
+
+    async def scan_iter(self, match=None, count=None):
+        self._call()
+        prefix = match[:-1] if match and match.endswith("*") else match
+        for name in list(self.data):
+            if prefix is None or name.startswith(prefix):
+                yield name
+
+    async def ping(self):
+        self._call()
+        return True
+
+    async def aclose(self):
+        self._call()
+
+
+@pytest.fixture
+def redis_cache(monkeypatch):
+    fake = FakeRedis()
+    cache.configure(fake)
+    monkeypatch.setattr(cache, "_skip_until", 0.0)
+    yield fake
+    cache.configure(None)
 
 
 class FakeBox:

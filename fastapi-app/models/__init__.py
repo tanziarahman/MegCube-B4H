@@ -24,6 +24,7 @@ Modules:
   reference  boxes, cameras, contacts
   ingest     push_inbox, ingest_cursors, events
   counting   stranger_profiles, sightings, count_buckets
+  dashboard  daily_stats
   alarms     alarm_rules (+ cameras, windows, targets, recipients, state), incidents, notifications
   admin      app_settings, audit_log
 
@@ -35,6 +36,7 @@ from .alarms import (AlarmRule, AlarmRuleCamera, AlarmRuleRecipient, AlarmRuleSt
                      AlarmRuleWindow, Incident, IncidentEvent, Notification)
 from .base import TIMESTAMPTZ, utcnow
 from .counting import CountBucket, Sighting, StrangerProfile
+from .dashboard import DailyStat
 from .enums import (Channel, CountBasis, DedupeScope, EventKind, EventSource, InboxStatus,
                     IncidentStatus, IngestStream, MatchMode, NotificationStatus, PersonSource, RecognitionResult,
                     Severity, TargetType)
@@ -48,6 +50,8 @@ __all__ = [
     "PushInbox", "IngestCursor", "Event",
     # counting
     "StrangerProfile", "Sighting", "CountBucket",
+    # dashboard
+    "DailyStat",
     # alarms
     "AlarmRule", "AlarmRuleCamera", "AlarmRuleWindow", "AlarmRuleTarget", "AlarmRuleRecipient",
     "AlarmRuleState", "Incident", "IncidentEvent", "Notification",

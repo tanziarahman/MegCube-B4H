@@ -62,6 +62,8 @@ class Event(SQLModel, table=True):
         Index("ix_events_person_time", "person_uuid", "occurred_at",
               postgresql_where=text("person_uuid IS NOT NULL")),
         Index("ix_events_sighting", "sighting_id"),
+        # Dashboard daily stats, latest events and top people.
+        Index("ix_events_box_time", "box_id", "occurred_at"),
     )
 
     id: int | None = bigint_pk()

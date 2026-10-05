@@ -96,7 +96,8 @@ class CountBucket(SQLModel, table=True):
     (16 cameras x 96 buckets/day is ~560k rows a year). Only add-up-able numbers live here; unique
     people can't be added across buckets, so they come from `sightings`. The writer never adds or
     subtracts: after each batch it recounts the touched buckets from `sightings` and `events`
-    (counting/builder.py), so merges and late records can't make the totals drift."""
+    (counting/builder.py), so merges and late records can't make the totals drift. Dashboard
+    per-kind and score totals are recounted here as additive columns."""
     __tablename__ = "count_buckets"
     __table_args__ = (
         CheckConstraint("local_hour BETWEEN 0 AND 23", name="local_hour"),
@@ -116,4 +117,13 @@ class CountBucket(SQLModel, table=True):
     face_sightings: int = 0                                       # ... that have a face track
     body_sightings: int = 0                                       # ... that have a body track
     events: int = 0                                               # raw box records (activity level)
+    # Dashboard numbers, recounted with the others. "identity" = matched + stranger records.
+    matched_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    stranger_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    face_capture_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    body_capture_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    low_confidence_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    low_liveness_events: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    identity_score_sum: float = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    identity_score_count: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     updated_at: datetime = updated_at_field()

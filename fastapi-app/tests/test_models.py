@@ -20,7 +20,7 @@ def ddl(table_name: str) -> str:
 def test_every_table_compiles():
     expected = {
         "boxes", "cameras", "contacts", "push_inbox", "ingest_cursors", "events", "stranger_profiles",
-        "sightings", "count_buckets", "alarm_rules", "alarm_rule_cameras", "alarm_rule_windows",
+        "sightings", "count_buckets", "daily_stats", "alarm_rules", "alarm_rule_cameras", "alarm_rule_windows",
         "alarm_rule_targets", "alarm_rule_recipients", "alarm_rule_state", "incidents",
         "incident_events", "notifications", "app_settings", "audit_log",
     }
@@ -41,6 +41,15 @@ def test_events_are_deduplicated_per_box_record():
     assert "UNIQUE (box_id, kind, alarm_id)" in sql
     assert "USING brin (occurred_at)" in sql
     assert "kind IN ('matched', 'stranger', 'face_capture', 'body_capture')" in sql
+    assert "ix_events_box_time" in sql
+
+
+def test_dashboard_stats_schema():
+    assert "PRIMARY KEY (box_id, local_date)" in ddl("daily_stats")
+    assert {
+        "matched_events", "stranger_events", "face_capture_events", "body_capture_events",
+        "low_confidence_events", "low_liveness_events", "identity_score_sum", "identity_score_count",
+    } <= set(TABLES["count_buckets"].columns.keys())
 
 
 def test_a_track_belongs_to_one_sighting_per_camera_and_day():
