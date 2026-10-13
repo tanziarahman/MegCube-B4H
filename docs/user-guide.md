@@ -1,756 +1,504 @@
 # B4H Portal User Guide
 
-This guide explains how to use the B4H Portal day to day: what each page is for, what you see on it, and step-by-step instructions for common tasks.
+How to use the B4H Portal day to day: what each page shows, and how to do common tasks.
 
-> **Who this is for:** security staff, receptionists, site managers and anyone else who uses the portal. You don't need any technical knowledge.
-> **Setting the portal up** (installing, configuring, fixing the server) is covered in the [main README](../README.md).
+> **Who this is for:** security staff, receptionists, site managers and anyone else using the portal. No technical knowledge needed.
+> **Installing or fixing the portal** is covered in the [main README](../README.md).
 
 ---
 
 ## Contents
 
 1. [What the portal does](#1-what-the-portal-does)
-2. [Before you start](#2-before-you-start)
-3. [Signing in and out](#3-signing-in-and-out)
-4. [Finding your way around](#4-finding-your-way-around)
-5. [Dashboard](#5-dashboard): today at a glance
-6. [Live view](#6-live-view): watch cameras
-7. [Recognition](#7-recognition): who was recognised, and strangers
-8. [Captures](#8-captures): every face and body the cameras saw
-9. [People](#9-people): the face library
-10. [Devices](#10-devices): cameras
-11. [Time plans](#11-time-plans): schedules
-12. [Alarms](#12-alarms): get emailed when someone is where they shouldn't be
-13. [People counting](#13-people-counting): how many people walked past each camera
-14. [Pages not available yet](#14-pages-not-available-yet)
-15. [Step-by-step: common tasks](#15-step-by-step-common-tasks)
-16. [Messages and what to do](#16-messages-and-what-to-do)
-17. [Frequently asked questions](#17-frequently-asked-questions)
-18. [Glossary](#18-glossary)
+2. [Getting started](#2-getting-started)
+3. [Finding your way around](#3-finding-your-way-around)
+4. [Dashboard](#4-dashboard)
+5. [Live view](#5-live-view)
+6. [Recognition](#6-recognition)
+7. [Captures](#7-captures)
+8. [People](#8-people)
+9. [Devices](#9-devices)
+10. [Time plans](#10-time-plans)
+11. [Alarms](#11-alarms)
+12. [People counting](#12-people-counting)
+13. [Common tasks](#13-common-tasks)
+14. [Messages and what to do](#14-messages-and-what-to-do)
+15. [Questions](#15-questions)
+16. [Glossary](#16-glossary)
 
 ---
 
 ## 1. What the portal does
 
-Your site has a **B4H analytics box** connected to its cameras. The box watches the video, recognises the faces of people it knows, and records everything it sees. The portal is the website you use to work with the box:
+Your site has a **B4H box** connected to its cameras. The box watches the video, recognises people it knows, and saves what it sees. The portal is the website for working with the box.
 
-| You want to… | The portal lets you… |
+| You want to… | Go to |
 |---|---|
-| Know what's happening today | See totals, trends and problems on the **Dashboard** |
-| Watch cameras | View up to 9 cameras live in **Live view** |
-| Know who came in, and when | Search **Recognition** records |
-| Spot unknown visitors | Find **strangers** (faces the box doesn't know) |
-| Trace someone's movements | Browse **Captures** by camera, time and track |
-| Register staff or visitors | Add people and photos to the **face library** |
-| Manage cameras | Add, edit or remove cameras in **Devices** |
-| Set working hours | Create schedules in **Time plans** |
+| See today at a glance | **Dashboard** |
+| Watch cameras live | **Live view** |
+| Find who came in, and when | **Recognition** |
+| Find unknown visitors (strangers) | **Recognition** |
+| Trace someone's movements | **Captures** |
+| Register staff or visitors | **People** |
+| Add or fix cameras | **Devices** |
+| Set working-hours schedules | **Time plans** |
+| Get an email when someone is somewhere they shouldn't be | **Alarms** |
+| Know how many people walked past a camera | **People counting** |
 
-**Key ideas in one minute**
+**Key ideas**
 
-- The **face library** is the box's list of known people. Each person has a reference photo.
-- When a camera sees a face that matches someone in the library, the box saves a **recognition** (a "match").
-- A face that matches nobody is a **stranger**.
-- Every face or body the box picks out is also saved as a **capture**, whether it was recognised or not.
-- **Similarity** (0–100) is how closely a face matches the library photo. **Liveness** (0–100) is how likely it is to be a real person rather than a photo held up to the camera.
+- The **face library** is the box's list of known people, each with a photo.
+- A **recognition** (or *match*) is when a camera sees someone from the face library.
+- A **stranger** is a face that matches nobody in the library.
+- A **capture** is any face or body picture the box saved, recognised or not.
+- **Similarity** (0–100): how closely a face matches the library photo.
+- **Liveness** (0–100): how likely it's a real person, not a photo held up to the camera.
 
 ---
 
-## 2. Before you start
+## 2. Getting started
 
-You need:
+**You need:** a computer on the same network as the box, and Chrome, Edge or Firefox. You also need the portal's address, usually **http://localhost:3000**, or one your administrator gives you.
 
-- A computer on the **same network** as the box (usually the office or site network).
-- A modern browser: Chrome, Edge or Firefox.
-- The portal's address. It is usually **http://localhost:3000** on the computer that runs it, or an address your administrator gives you.
+> Set your computer to the **same time zone as the box**, or times on screen will look shifted.
 
-> **Times:** the portal shows times using your computer's clock settings. Make sure your computer is set to the **same time zone as the box**, or times on screen will look shifted.
+**Sign in:** type any **Username** and the password `admin`, then click **Sign in**. This is a demo sign-in; individual accounts aren't set up yet.
 
----
-
-## 3. Signing in and out
-
-### Sign in
-
-1. Open the portal address in your browser. The **Sign in** page appears.
-2. Type a **Username** (any name works for now) and the **Password** `admin`.
-3. Click **Sign in**. The **Dashboard** opens.
-
-If the password is wrong, you'll see *"Incorrect username or password."* Try again.
-
-> **Note:** this is a demonstration sign-in. Individual user accounts aren't set up yet, so everyone uses the same password.
-
-### Sign out
-
-1. Click **Admin** at the top right of the screen.
-2. Click **Sign out**. You return to the Sign in page.
-
-Keyboard: press **Tab** until **Admin** is highlighted, press **Enter** to open the menu, and **Esc** to close it.
+**Sign out:** click **Admin** (top right) → **Sign out**.
 
 ---
 
-## 4. Finding your way around
+## 3. Finding your way around
 
-```
-┌──────────────┬─────────────────────────────────────────────────────────────┐
-│ B4H Portal   │ [≡] [ Search… ]     Demo data  Devices 20/24  ● Live  EN|中  Admin ▾ │
-│              ├─────────────────────────────────────────────────────────────┤
-│ MONITOR      │                                                             │
-│  Dashboard   │   Page title                                                │
-│  Live view   │   Short description                                         │
-│ EVENTS       │                                                             │
-│  Alarms      │   ┌───────────────────────────────────────────────┐         │
-│  Recognition │   │                                               │         │
-│  Captures    │   │              page content                     │         │
-│  People cnt. │   │                                               │         │
-│ MANAGE       │   └───────────────────────────────────────────────┘         │
-│  People      │                                                             │
-│  Devices     │                                                             │
-│  Time plans  │                                                             │
-│  Settings    │                                                             │
-└──────────────┴─────────────────────────────────────────────────────────────┘
-```
+The **sidebar** on the left groups the pages:
 
-### Sidebar (left)
-
-| Group | Pages | Use it to… |
-|---|---|---|
-| **Monitor** | Dashboard, Live view | See what's happening now |
-| **Events** | Alarms, Recognition, Captures, People counting | Look back at what the cameras detected |
-| **Manage** | People, Devices, Time plans, Settings | Change what the box knows and does |
-
-The page you're on is highlighted. To make more room, click the **collapse button** (left of the search box): the sidebar shrinks to icons. Hover an icon to see its name. Click the button again to expand it. The portal remembers your choice.
-
-### Top bar
-
-| Item | What it does |
+| Group | Pages |
 |---|---|
-| **Search box** | Takes you to the **People** page. It doesn't filter by what you typed yet. |
-| **Demo data**, **Devices 20 / 24**, **Live** | Placeholder indicators that don't show real values yet. For real camera status, use the **Dashboard** or **Devices** page. |
-| **EN \| 中** | Language choice. Pages are in English for now. |
-| **Admin** | Sign out |
+| **Monitor** | Dashboard, Live view |
+| **Events** | Alarms, Recognition, Captures, People counting |
+| **Manage** | People, Devices, Time plans, Settings (not available yet) |
 
-The red number next to **Alarms** in the sidebar is the number of **open alarms** (updated every minute).
+- The red number next to **Alarms** is the number of open alarms (updated every minute).
+- The button left of the search box shrinks the sidebar to icons. Click it again to expand.
 
-### Things that work the same everywhere
+The **top bar** has:
+- a search box (it only opens the People page for now)
+- some indicators that aren't connected to real data yet (*Demo data*, *Devices 20/24*, *Live*)
+- a language switch (English only for now)
+- **Admin**, for signing out
 
-- **Esc** closes any open window or side panel (except while something is saving).
-- **Deleting always asks you to confirm first.** Deletions change the box and **can't be undone**.
-- **Errors appear in red** with an explanation. There is usually a **Try again**, **Refresh** or **Dismiss** button.
-- **Pictures**: click a small picture in a table to open it full size in a new tab (on the Recognition page).
-- **Refresh** buttons reload the latest data from the box.
+**Works the same everywhere**
+
+- **Esc** closes windows and side panels.
+- **Deleting always asks first, and can't be undone.**
+- Errors appear in red, usually with a **Try again** or **Refresh** button.
+- **Refresh** reloads the latest data.
 
 ---
 
-## 5. Dashboard
+## 4. Dashboard
 
-**What it's for:** a one-screen summary of **today**: how many people were recognised, how many strangers, whether every camera is working, and what needs attention. Open it first each day.
+**What it's for:** a one-screen summary of **today**. Check it first each day.
 
-**How it updates:** it refreshes by itself **every 45 seconds**. Click **Refresh** (top right) to update it now. If a refresh fails, the last good figures stay on screen with a red note: *"Showing last successful snapshot"*.
+It refreshes itself every 45 seconds. Click **Refresh** for the very latest figures. If a refresh fails, the last figures stay on screen with a red note.
 
-### What's on the page (top to bottom)
+The line at the top shows whether the box clock was read (green dot) or not (amber). It also shows where the numbers came from: *portal database* (fast) or *box*. The figures mean the same either way.
 
-**Status line**: a green dot and *Box clock connected* means the box's clock was read. An amber dot and *Box clock unavailable* means it wasn't (see [FAQ](#17-frequently-asked-questions)). Today's date is shown alongside.
-
-**Summary cards**
-
-| Card | Shows |
+| Section | What it shows |
 |---|---|
-| **Recognitions** | People matched to the face library today, and the change compared with yesterday (e.g. *+25% vs yesterday*, *New*, *No change*) |
-| **Strangers** | Faces not in the library today, and their share of all face matches. **Red** when there are any, green when there are none. |
-| **Cameras** | Online cameras / total cameras, and how many are streaming video. **Amber** if any are offline. |
-| **Captures** | Face and body captures today, split into face and body |
+| **Summary cards** | **Recognitions** and **Strangers** today (compared with yesterday), **Cameras** online, and **Captures** (face and body) |
+| **People flow** | **Tracked encounters** (each pass by a camera counts once), **unique recognised people**, and **recognised** and **stranger** encounters |
+| **Activity by hour** | A bar per hour; the tallest is the **peak hour** |
+| **Signals worth checking** | **Average match score**, **low-confidence matches** (similarity under 70; may be wrong matches), **low-liveness matches** (under 80; **someone may have held up a photo**, so investigate), **busiest camera** |
+| **Camera readiness** | Each camera: 🟢 **Ready**, 🟡 **Stream issue** (online but no video), 🔴 **Offline** |
+| **Attention queue** | Up to 5 problems, most serious first: offline cameras, no video, no analysis task, box clock unreadable, or *Dashboard numbers may be behind* |
+| **Recent activity** | Latest matches and strangers. **View records** opens Recognition. |
+| **Most recognised today** | The five people seen most |
 
-**People flow**: counts the day's foot traffic without double counting:
-
-| Figure | Meaning |
-|---|---|
-| **Tracked encounters** | How many separate times a person passed a camera (one per camera *track*, so someone walking past once counts once) |
-| **Unique recognized people** | How many *different* library people were recognised |
-| **Recognized encounters** | Passes by recognised people, and what share of face tracks they make up |
-| **Stranger encounters** | Passes by strangers. The box can't tell whether two stranger passes were the same person, so this counts passes, not people. |
-
-**Security activity by hour**: a bar for each hour of the day. The tallest bar is the **peak hour** (shown top right). Hover a bar to see its exact count.
-
-**Signals worth checking**
-
-| Signal | Meaning | When to act |
-|---|---|---|
-| **Average match score** | Average similarity of today's matches | A low average can mean poor lighting or old library photos |
-| **Low-confidence matches** | Matches with similarity under 70% | Amber if any. Check these records; they might be wrong matches. |
-| **Low-liveness matches** | Faces with liveness under 80% | Red if any. **Someone may have held up a photo or screen.** Investigate. |
-| **Busiest camera** | Camera with the most recognition events | — |
-
-**Camera readiness**: every camera with its analysis task and state:
-
-| Dot | State | Meaning |
-|---|---|---|
-| 🟢 | **Ready** | Online and sending video |
-| 🟡 | **Stream issue** | Online, but the box isn't receiving its video |
-| 🔴 | **Offline** | The box can't reach the camera |
-
-Click **Manage devices** to open the Devices page.
-
-**Attention queue**: up to 5 problems, most serious first: a camera offline, a camera not streaming, a camera with no analysis task, or the box clock not readable. *No device issues detected* means all is well.
-
-**Recent recognition activity**: the latest matches and strangers with camera, time and score. Click **View records** to open the Recognition page.
-
-**Most recognized today**: the five people seen most often.
-
-At the bottom: the time of the last refresh and the box's time zone.
-
-> If the page says *"Trend metrics use the latest N recognition records; totals are complete"*, it was a very busy day. The totals are exact, but the charts and signals are based on a sample.
+> *"Trend metrics use the latest N recognition records"* means it was a very busy day: totals are exact, but charts use a sample.
 
 ---
 
-## 6. Live view
+## 5. Live view
 
-**What it's for:** watching up to 9 cameras at once, with the latest recognitions alongside.
+**What it's for:** watching up to 9 cameras at once.
 
-### Layout of the page
+- **Cameras** (left): 🟢 online, grey offline. *on wall* means it's already showing.
+- **Video wall** (middle): choose **Layout 1**, **4** or **9**. Online cameras fill the tiles when the page opens.
+- **Latest recognitions** (right): today's newest matches, updated every 5 seconds.
 
-| Area | What it shows |
-|---|---|
-| **Cameras** (left) | Every camera. 🟢 = online. Grey = offline (can't be selected). **on wall** = already showing in a tile. |
-| **Video wall** (middle) | The video tiles. Choose **Layout 1**, **4** (the default) or **9**. |
-| **Latest recognitions** (right) | Today's newest matches: face photo, name, camera, time and similarity. Updates every 5 seconds. Strangers aren't listed here. |
+**Show a camera:** click a tile (blue outline), then click the camera in the list. The next tile is selected for you. To move a camera, select another tile and click the camera again.
 
-When the page opens, the online cameras fill the tiles automatically.
-
-### Controls on each video tile
-
-Hover the top of a tile to see its name, its analysis task, and these buttons:
+**Tile buttons** (hover the top of a tile):
 
 | Button | What it does |
 |---|---|
-| **SD** / **HD** | Switches quality. **SD** = lighter, lower-resolution video (saves bandwidth). **HD** = full resolution. |
-| ⟳ **Reconnect** | Restarts the video if it froze |
-| ⤢ **Full screen** | Fills the screen with this camera. Press **Esc** to leave. |
-| ✕ **Close** | Removes the camera from the tile |
+| **SD** / **HD** | Lighter video / full quality. Grids use SD; 1-tile layout and full screen use HD. |
+| ⟳ | Reconnect a frozen tile |
+| ⤢ | Full screen (**Esc** to leave) |
+| ✕ | Remove the camera from the tile |
 
-Grid tiles use **SD** automatically; the 1-tile layout and full screen use **HD** automatically. You can override either with the SD/HD button.
+**If something goes wrong**
 
-### How to…
+- *Stream unavailable*: the camera can't be reached, or video conversion isn't set up. Tell your administrator.
+- *Too many live videos open*: about 16 videos are already playing across all users. Close some tiles or tabs.
 
-**Show a camera in a tile**
-1. Click the tile you want to use. It gets a **blue outline**.
-2. Click the camera in the **Cameras** list.
-3. The next tile is selected automatically, so you can keep clicking cameras to fill the wall.
-
-**Move a camera to another tile**: select the new tile, then click the camera again. It moves rather than appearing twice.
-
-**Fix a frozen or black tile**: click ⟳ **Reconnect**. If the tile shows *"no video"*, click **Retry**.
-
-### Good to know
-
-- *"Stream unavailable. Check the camera, and that ffmpeg is installed on the backend."* means the camera can't be reached, or video conversion isn't set up on the portal's server. Tell your administrator.
-- *"Too many live videos open"*: the portal allows about 16 videos at once across all users and tabs. Close tiles or other Live view tabs.
-- Live video uses a lot of network bandwidth. Close the page when you're not watching.
+Live video uses a lot of bandwidth, so close the page when you're not watching.
 
 ---
 
-## 7. Recognition
+## 6. Recognition
 
-**What it's for:** finding out **who was recognised, where and when**, and finding **strangers**.
+**What it's for:** finding **who was recognised, where and when**, and finding **strangers**.
 
-### Filters (top of the page)
+1. Set the filters: **Capture device**, **Recognition result** (**Matched** or **Stranger**), and **From** / **To** (default: today).
+2. Click **Search**. **Reset** returns the filters to today, Matched, all cameras.
 
-| Filter | Options |
-|---|---|
-| **Capture device** | **All**, or one camera |
-| **Recognition result** | **Matched** (person found in the face library) or **Stranger** |
-| **From** / **To** | Date and time range. Default: today, 00:00 to 23:59. |
+> **Capture device** only filters the records on the current page, so a page may show fewer than 10 rows.
 
-Click **Search** to load records with these filters. **Reset** puts the filters back to today, Matched and all cameras; click **Search** afterwards to reload.
+The table shows 10 records per page: the face, the whole scene, camera, time, liveness, the library photo, name, group and similarity. Click a picture to open it full size.
 
-> **Capture device** filters the records already loaded on the current page. It doesn't run a new search, so a page may show fewer than 10 rows. The footer then says *"showing N from <camera> on this page"*.
+**Details** (👁): opens a side panel with:
+- the captured and library photos
+- track ID and liveness
+- face attributes (age, glasses, mask…)
+- other people it resembled
+- the raw record, for support
 
-### The table
+**Delete** (🗑): removes the record from the box permanently, after you confirm.
 
-10 records per page. Use **Previous** / **Next** at the bottom; the footer shows the total and the page number.
-
-| Column | Meaning |
-|---|---|
-| **Face** | The face the camera captured (click to open full size) |
-| **Panoramic** | The whole camera frame |
-| **Capture device** | Which camera |
-| **Capture time** | When it happened |
-| **Living fraction** | Liveness score (0–100). Low values can mean a photo or screen. |
-| **Base image** | The person's photo in the face library |
-| **Name** | The matched person (strangers have no library name) |
-| **Group** | The person's groups, e.g. Staff |
-| **Similarity** | How closely the face matched (0–100) |
-
-### Record details
-
-Click **👁 Details** on a row. A panel opens on the right with:
-
-- The **name**, similarity, time and camera at the top.
-- **Captured** and **Library photo** side by side. Switch the captured picture between **Face** and **Scene** (the whole frame).
-- **Person**: the name and group tags.
-- **Event**: the **Track ID** and **Living fraction**.
-- **Face attributes**: age, gender, hat, glasses, mask, hairstyle and beard, as the box estimated them.
-- **Other candidates**: other library people the face resembled, with their similarity.
-- **Show raw data**: the box's original record, for technical support.
-
-Close the panel with ✕, **Esc**, or by clicking outside it.
-
-### Delete a record
-
-1. Click the red 🗑 on the row.
-2. A window asks *"Are you sure you want to delete this record?"* **Cancel** is selected by default, so pressing Enter is safe.
-3. Click **Delete**. The record is removed from the box **permanently**.
-
-### Good to know
-
-- Records of people who have since been **removed from the face library** are hidden automatically.
-- Very long date ranges can be slow. If you see *"The box took too long to answer"*, shorten the range.
+> Records of people removed from the face library are hidden. If you see *The box took too long to answer*, shorten the date range.
 
 ---
 
-## 8. Captures
+## 7. Captures
 
-**What it's for:** browsing **every face and body** the cameras picked out, recognised or not. Use it to trace someone's movements or check what a camera sees.
+**What it's for:** browsing **every face and body** the cameras picked out, recognised or not. Use it to trace someone's movements.
 
-### Filters
+Filters apply as soon as you change them:
+- **From** / **To**
+- **Target type**: Face or Body
+- **Device**
+- **Track ID**: one person's path past one camera
 
-Filters apply **as soon as you change them**; there's no Search button.
+> **Device** and **Track ID** only filter the current page. To search a whole day for one track, set the page size to 30 and go through the pages.
 
-| Filter | Options |
-|---|---|
-| **From** / **To** | Dates (whole days). Default: today. |
-| **Target type** | **All types**, **Face** or **Body** |
-| **Device** | **All devices**, or one camera |
-| **Track ID** | All or part of a track number, e.g. `5610081`. A track is one person's continuous path past one camera. |
-
-**Reset** puts all filters back to today. **Refresh** reloads the data.
-
-> **Device** and **Track ID** only filter the captures on the **current page**. A note appears to remind you. To search a whole day for one track, raise the page size to 30 and go through the pages.
-
-### Views
-
-Switch with the two icons on the right of the filter bar:
-
-- **Grid** (default): one picture per capture, with a **Face** or **Body** badge, camera, time and track number.
-- **List**: a table with Capture, Type, Device, Time, Track ID and a **Details** button.
-
-At the bottom: *"Showing 1–10 of N"*, the page-size choice (**10**, **20** or **30 / page**) and page arrows.
-
-### Capture details
-
-Click a picture (grid) or **Details** (list). A window shows the full camera frame, the type, track number, camera and time, and the **attributes** the box detected. Attributes are shown as the box's **raw code numbers**; there's no legend for them yet.
-
-Close with ✕, **Esc**, or by clicking outside the window.
+Switch between **grid** and **list** view with the icons on the right. Click a picture or **Details** to see the full frame and the attributes the box detected (shown as raw codes for now).
 
 ---
 
-## 9. People
+## 8. People
 
-**What it's for:** managing the **face library**, the people the box can recognise. Anyone not in it is reported as a **stranger**.
+**What it's for:** managing the **face library**. Anyone not in it is reported as a stranger.
 
-### The table
-
-The top of the page shows how many people are registered. The table lists 10 people per page:
-
-| Column | Meaning |
-|---|---|
-| **Person** | Photo, name and birthday (*No birthday recorded* if empty). If the photo can't load, the person's initial is shown. |
-| **Code** | Optional code, e.g. an employee number |
-| **Groups** | Group tags, or *Unassigned* |
-| **Person ID** | The box's id for this person |
-| **Actions** | **Details**, **Edit**, 🗑 delete |
-
-Click **Refresh** to reload the list.
-
-### Add a person
+**Add a person**
 
 1. Click **+ Add person**.
-2. Fill in:
-   - **Name** (required)
-   - **Reference photo** (required): a clear, front-facing photo of the face, at most 5 MB
-   - **Code**, **Birthday**, **Groups** (tick one or more) and **Remarks** (all optional)
-3. Click **Add person**. The person appears in the list and the box starts recognising them.
+2. Enter a **Name** and choose a **Reference photo** (clear, front-facing, under 5 MB).
+3. Optionally add a **Code** (e.g. employee number), **Birthday**, **Groups** and **Remarks**.
+4. Click **Add person**. The box starts recognising them.
 
-### View a person
+**Edit** (✎): change details and click **Save changes**.
+- Leave the photo empty to keep the current one.
+- Ticked groups replace the old ones. If you untick every group, the groups stay as they were.
 
-Click **Details** to see their photo, person ID, code, birthday, groups and remarks. Click **Edit person** to change them.
+**Delete** (🗑): removes the person from the box. Their old records are hidden on the Recognition page.
 
-### Edit a person
-
-1. Click **✎ Edit** on the row.
-2. Change any fields.
-   - **To keep the current photo, leave Reference photo empty.** To replace it, choose a new file.
-   - **Groups:** the ticked groups replace the person's groups. If you untick *every* group, the groups are left unchanged. To remove someone from all groups, use the box's own web interface.
-3. Click **Save changes**.
-
-### Delete a person
-
-1. Click the red 🗑 on the row.
-2. Confirm in the browser's pop-up (*"Delete <name> from the face library?"*).
-
-The person is removed from the box. Their past recognition records are hidden from the Recognition page.
-
-### Tips for good recognition
-
-- Use a **sharp, well-lit, front-facing** photo with **only one face** in it.
-- Avoid sunglasses, hats and heavy shadows.
-- If the box rejects a photo, try a clearer one or crop closer to the face.
-- Put people in **groups** (e.g. Staff, Contractors, Visitors) so they're easy to tell apart in records.
+**Tips for good recognition**
+- Use a sharp, well-lit, front-facing photo with one face and no sunglasses or hat.
+- Use groups (Staff, Visitors…) to tell people apart in records.
 
 ---
 
-## 10. Devices
+## 9. Devices
 
-**What it's for:** managing the **cameras connected to the box**: see which are online, and add, edit or remove them.
+**What it's for:** managing the **cameras** connected to the box.
 
-### At the top
+The page shows:
+- counts of cameras online and offline
+- filters for name, status and address
+- a list or grid of cameras (passwords are never shown)
 
-- Counts of **Cameras**, **Online** and **Offline**.
-- **Filters** that apply as you type: **Device name**, **Status** (All / Online / Offline) and **Address** (e.g. an IP address). **Reset** appears while a filter is active.
-- **+ New device**, **Refresh**, and the **grid** / **list** view icons.
-
-### The list (default view)
-
-| Column | Meaning |
-|---|---|
-| **Device** | Name and device number (e.g. `#2`) |
-| **Type** | Video or Picture |
-| **Protocol** | RTSP (or GB28181) |
-| **Host** | The camera's IP address and port |
-| **Stream** | The stream path on the camera |
-| **Status** | **Online** or **Offline**. Hover *Offline* to see the box's status code (useful for support). |
-
-The **grid view** shows the same as cards, plus a **Streaming** / **Not streaming** badge on online cameras.
-
-Camera passwords are **never shown**. Addresses appear as `user:****@…`.
-
-### Add a camera
+**Add a camera**
 
 1. Click **+ New device**.
-2. Enter a **Device name** (must be unique, e.g. *Main entrance*).
-3. Choose **Device type: Video** and **Protocol: RTSP**.
-4. Enter the **RTSP address**, e.g. `rtsp://192.168.90.24:554/ISAPI/Streaming/channels/201`. It must start with `rtsp://`. Your camera installer or the camera's manual gives this address.
-5. Enter the camera's **Username** and **Password**. Click the 👁 icon to check what you typed.
-6. Click **Add device**. A green message confirms it, e.g. *Added "Main entrance" as device #4.* The device number is chosen automatically.
+2. Enter a unique **Device name**, and choose **Video** and **RTSP**.
+3. Enter the **RTSP address** (starts with `rtsp://`; the camera installer can give it to you), **Username** and **Password**.
+4. Click **Add device**.
 
-> **Picture** devices and **GB28181** cameras can be selected but not saved yet. The window explains this, and **Add device** stays disabled. Use the box's own web interface for these.
+> **Picture** and **GB28181** devices can't be added from the portal yet. Use the box's own web page for these.
 
-### Edit a camera
+**Edit** (✎): leave **Password** empty to keep the current one.
 
-1. Click **✎ Edit**.
-2. Change the name, RTSP address or username.
-3. **Leave Password empty to keep the current password.** Type a new one only if it has changed.
-4. Click **Save changes**.
+**Delete** (🗑): the box stops using that camera.
 
-### Remove a camera
-
-1. Click the red 🗑.
-2. Confirm with **Delete**. The box stops analysing that camera. This can't be undone.
-
-### Good to know
-
-- **Online** but **Not streaming** (grid view) means the camera answers but the box isn't getting video. Check the stream path, username and password.
-- You don't need to put the username and password inside the RTSP address; the separate fields are enough.
+> **Online** but **Not streaming** (grid view) means the box reaches the camera but gets no video. Check the address, username and password.
 
 ---
 
-## 11. Time plans
+## 10. Time plans
 
-**What it's for:** creating **schedules** that say *when* the box's rules are active, for example office hours only, or 24/7.
-
+**What it's for:** schedules for **when** the box's rules are active, e.g. office hours.
 - **Regular plans** repeat every week.
-- **Festival plans** are for holidays and special days.
+- **Festival plans** are for holidays.
 
-> **All times are in the box's time zone**, not your computer's.
+All times are in the box's time zone.
 
-### Layout of the page
+**Create a plan**
 
-| Area | What it shows |
-|---|---|
-| **Top bar** | **Regular plans** / **Festival plans** tabs; the clock (*Box clock* with a green dot, or *Portal clock* with an amber dot if the box clock couldn't be read); a ⟳ refresh button |
-| **Plan list** (left) | **Find a plan** search, **+ New time plan**, and the plans. Each plan is labelled *Box plan*, *Default plan* (green dot) or *Local draft*. |
-| **Editor** (middle) | The selected plan: its name, a weekly timeline, and the **Daily windows** for each day |
-| **Side panel** (right) | The box clock and time zone; a **Plan summary** (type, number of plans, active days out of 7) |
+1. Choose the **Regular plans** or **Festival plans** tab, then click **+ New time plan**.
+2. Click the name at the top to rename it.
+3. Click **+** on each active day. This adds a 09:00–17:00 window; change the times as needed. Add a second window for a split day. Days without windows are off.
+4. Click **Save draft** to create it on the box.
 
-The weekly timeline shows each day from **Monday to Sunday** as a bar from 00:00 to 24:00, with blue blocks where the plan is active.
+**Edit:** select a plan, make changes, click **Save to box**.
 
-### Create a plan
+**Delete:** click 🗑 next to the save button.
 
-1. Choose the **Regular plans** or **Festival plans** tab.
-2. Click **+ New time plan**. A *Local draft* appears.
-3. Click the plan's name at the top of the editor and type a new one, e.g. *Office hours*.
-4. For each day the plan should be active, click **+** (or **Add a window**). A window from **09:00 to 17:00** is added.
-5. Change the start and end times as needed. For a split day (e.g. 08:00–12:00 and 13:00–17:00), add a second window.
-6. Leave a day with no windows to keep it **off**.
-7. Click **Save draft**. The plan is created on the box, and a message confirms it.
-
-> A new plan is only kept **in your browser** until you click **Save draft**. Nobody else can see it, and the box doesn't use it.
-
-### Edit a plan
-
-1. Select the plan in the list.
-2. Change the name or the windows. To remove a window, click the 🗑 next to it.
-3. Click **Save to box**.
-
-> Changes you haven't saved are kept **in your browser** and are not on the box yet. If you leave the page and come back, your unsaved changes are still shown. Click **Save to box** to apply them.
-
-### Delete a plan
-
-1. Select the plan.
-2. Click the 🗑 button next to the Save button at the top of the editor.
-3. Confirm in the browser's pop-up. For a box plan it asks *Delete "…" from the box?*, which **can't be undone**. For a local draft it asks *Discard the local draft "…"?*, which only removes it from your browser.
+> Unsaved plans and changes are kept only **in your browser**: the box doesn't use them until you save.
 
 ---
 
-## 12. Alarms
+## 11. Alarms
 
-**What it's for:** getting an **email** when the cameras see someone where or when they shouldn't, for example *anyone on camera D3 after 10 pm*. You write the rules; the portal checks every detection from the box against them, a few seconds after it happens.
+**What it's for:** getting an **email** when the cameras see someone where or when they shouldn't, e.g. *anyone on camera D3 after 10 pm*. You write the rules; the portal checks every detection against them, usually within about 10 seconds.
 
-> Alarms need the portal's database. If the page says *Alarms need the portal database*, ask your administrator to set it up (see the [backend README](../fastapi-app/README.md#database-and-alarms)).
+> Alarms need the portal's database. If the page says *Alarms need the portal database*, ask your administrator.
 
-The page has three tabs: **Alarms** (what happened), **Rules** (what to watch for) and **Recipients** (who gets emailed).
+The page has three tabs.
 
-### Warnings at the top
+### Alarms tab: what happened
+
+Open alarms are shown first. Filter by **Status**, **Rule**, **Camera** and date. The list refreshes every 30 seconds.
+
+Each alarm shows:
+- the snapshot and time
+- the rule and its severity (**Info**, **Warning**, **Critical**)
+- who it was (a name, or **Stranger**)
+- its status (**Open**, **Acknowledged**, **Resolved**, **False alarm**)
+
+**Details** (or the link in the email) shows the full camera view, every detection in this alarm, and whether each email was sent. To handle it, type your name and an optional note, then click **Acknowledge**, **Resolve**, **False alarm** or **Reopen**.
+
+### Rules tab: what to watch for
+
+1. Click **+ New rule**. Give it a **name** and **severity**.
+2. Tick the **cameras** to watch.
+3. Choose **Who triggers it**:
+   - **Anyone**. Also tick **Body capture** to catch people whose face isn't visible.
+   - **Strangers only**.
+   - **Anyone in the face library**.
+   - **Specific people or groups**.
+4. **When it's active**: **Always**, or **Set times** (days and hours). A window like **22:00 to 06:00** runs past midnight.
+5. **Quiet period** (default 5 minutes): after an alarm, more people seen on that camera are added to the same alarm instead of sending more emails.
+6. Tick up to **5 recipients**, then click **Create rule**.
+
+The **On** switch pauses a rule. Deleting a rule keeps its past alarms.
+
+### Recipients tab: who gets emailed
+
+- **+ Add recipient** with a name and email.
+- Untick *Receives alarm emails* to pause someone.
+- Use **Send test** to check emails arrive (look in spam too).
+
+### Warnings at the top of the page
 
 | Warning | Meaning |
 |---|---|
-| *The portal can't read new detections from the box right now* | The box is unreachable. Alarms resume, and catch up, when it's back. |
-| *Email isn't set up* | Alarms are still recorded, but nobody is emailed until the administrator sets up email. |
-| *… alarm emails could not be delivered* | An email server problem. Open an alarm to see the error. |
+| *The portal can't read new detections from the box right now* | The box is unreachable. Alarms catch up when it's back. |
+| *Email isn't set up* | Alarms are saved but nobody is emailed. Tell your administrator. |
+| *… alarm emails could not be delivered* | Email server problem. Open an alarm to see the error. |
 
-### Alarms tab
-
-Shows **open** alarms first (change **Status** to see the others). Filter by **Rule**, **Camera** and dates. The list refreshes itself every 30 seconds.
-
-| Column | Meaning |
-|---|---|
-| **Snapshot** | The face (or body) the box captured |
-| **Time** | When the person was seen. *Reported N min late* means the portal was offline and caught up later. |
-| **Rule** | Which rule raised it, and its severity (**Info**, **Warning**, **Critical**) |
-| **Who** | The person's name if recognised, otherwise **Stranger** |
-| **Status** | **Open**, **Acknowledged**, **Resolved** or **False alarm** |
-
-If the same rule sees more people on that camera during its *quiet period*, they're added to the open alarm (*3 detections*) instead of sending more emails.
-
-Click **Acknowledge** to show you've seen it, or **Details** to open the alarm.
-
-### Alarm details
-
-- **Snapshot** and the full camera view. Images come from the box and disappear when it overwrites old records.
-- **Detections**: every detection grouped into this alarm.
-- **Emails**: who was emailed and whether it was **Sent**, **Waiting to send** or **Failed** (with the reason).
-- **Handle it**: type **your name** (remembered on this computer) and an optional **note**, then click **Acknowledge**, **Resolve**, **False alarm** or **Reopen**. **Save note** saves just the note.
-
-The link in an alarm email opens this page.
-
-### Create a rule
-
-1. Open the **Rules** tab and click **+ New rule**.
-2. Give it a **name** (e.g. *After hours on D3*) and a **severity**.
-3. Tick the **cameras** to watch.
-4. Choose **Who triggers it**:
-   - **Anyone**: any recognised person or stranger. Tick **Body capture** too to catch people whose face isn't visible.
-   - **Strangers only**: faces not in the face library.
-   - **Anyone in the face library**: recognised people only.
-   - **Specific people or groups**: tick the people and/or groups.
-5. Under **When it's active**, choose **Always**, or **Set times**: pick the days and the hours. A window that ends earlier than it starts (e.g. **22:00 to 06:00**) runs **past midnight** into the next morning. Times are the box's time.
-6. **Quiet period**: after an alarm, the rule waits this many minutes before emailing again for that camera (default 5).
-7. Tick up to **5 recipients** (add them first on the **Recipients** tab).
-8. Click **Create rule**.
-
-Use the **On** switch on a rule to pause it without deleting it. **Edit** changes it; **🗑** deletes it (its past alarms are kept).
-
-> If someone else saved the same rule while you were editing, you'll see *Someone else changed this rule…*: close the form, and edit again.
-
-### Recipients tab
-
-- **+ Add recipient**: name and email address. Untick *Receives alarm emails* to pause someone without taking them off rules.
-- **Send a test email**: type an address and click **Send test** to check emails arrive (look in spam too). The button is disabled until email is set up.
-
-### Good to know
-
-- Alarms work from the box's **face recognition and capture records**, so a person the box doesn't detect can't raise an alarm. Good camera angles and lighting matter.
-- An alarm usually arrives **within about 10 seconds** of the detection.
-- Each recipient gets their own email, with the snapshot attached.
+> A person the cameras don't detect can't raise an alarm, so camera angle and lighting matter.
 
 ---
 
-## 13. People counting
+## 12. People counting
 
-**Events → People counting.** How many people walked past a camera, and how many different people that was, over any period. It needs the portal database, like Alarms; without it the page says what to set up.
+**What it's for:** seeing **how many people walked past** each camera, and **how many different people** that was. Use it to find busy times and busy cameras.
 
-### Walk-pasts and different people
+> People counting needs the portal's database. If the page says so, ask your administrator.
 
-- A **walk-past** is one person passing one camera once. The box takes several pictures of someone as they pass (a face and a body picture, often more than one of each); they all count as **one** walk-past. Use the **Walk-pasts** list at the bottom to see the pictures behind every number.
-- **Different people** is how many different individuals that was: a person is counted as **new** the first time they appear in the chosen period; when they go away and come back, they're **not counted again**. So the same person walking past twice is 2 walk-pasts but 1 person. Counting starts afresh with each period you pick (a person counted yesterday is new again in *Today*). The portal tells people apart by **comparing their clothing and faces** in the box's pictures (and, for people in the face library, by the box's recognition).
-- A **visit**: the same recognised person seen again on the same camera within 2 minutes (for example, someone stepped behind a pillar) counts once.
+### The numbers
 
-> **Why "different people" says *estimate* and shows a range** (e.g. *≈ 7, likely 6–10*): the comparison isn't perfect. Ceiling cameras see faces from above, often half-hidden by a phone, so the portal relies mostly on **clothing** within a day, and on faces to recognise someone on another day. Two people dressed alike can be taken for one; one person under very different light (another camera) can look like two. The range shows how far off it could be. Walk-pasts with no usable picture aren't in the count; the line under the tiles says how many.
->
-> Because clothes change from day to day, a period of several days counts a person once per day unless their face is clear enough to recognise, so **multi-day totals run higher than the truth**. Faces of new walk-pasts are compared within a few seconds; until then the page says they're *still being processed*.
->
-> For a very long period (thousands of walk-pasts) the page asks you to pick a shorter one.
+| Number | Meaning | Example |
+|---|---|---|
+| **Walk-pasts** | One person passing one camera once. The box's several pictures of that pass count as one. | Ada passes the entrance at 9:00 and 13:00 = **2** |
+| **Different people** | How many separate people that was. Each person counts once per period. | Ada = **1** |
+| **Recognised people** | Different people from the face library | |
+| **Strangers** | Passes by people not in the face library. Counts passes, not people. | |
 
-**Strangers (walk-pasts)** counts passes the box compared with the face library and found no match. Strangers aren't told apart either, so this is a count of passes, not of different strangers.
+### Why "different people" is an estimate
 
-### Filters (top of the page)
+The box doesn't know who unrecognised people are. So the portal compares each walk-past's **face and clothing** with the others, and treats walk-pasts that look alike as the same person.
+
+This isn't perfect. Two people dressed alike can count as one, and one person in very different light can count as two. That's why the page shows a range, e.g. **≈ 7, likely 6–10**.
+
+- **Multi-day periods count too high**, because people change clothes. Single days are most accurate.
+- New walk-pasts take a few seconds to process (*still being processed*).
+- Walk-pasts with no usable picture aren't included; the page says how many.
+- Very long periods can't be compared; pick a shorter one.
+
+### Filters
 
 | Filter | What it does |
 |---|---|
-| **Cameras** | Tick one or more cameras. Untouched, it uses every camera included in counting (see *Camera settings*). |
-| **Period** | Today, Yesterday, Last 7 days, Last 30 days, or **Custom** (two dates, optional times). A custom "to" date without a time includes that whole day. |
-| **Hours** | Only these hours of each day, e.g. 09:00 to 17:00. A "to" earlier than "from" (22:00 to 05:00) runs **past midnight**. |
-| **Weekdays** | Only the ticked days, e.g. Mon–Fri. None ticked = every day. |
+| **Cameras** | Tick cameras. None ticked = all counted cameras. |
+| **Period** | Today, Yesterday, Last 7 days, Last 30 days, or **Custom** |
+| **Hours** | Only these hours, e.g. 09:00–17:00 (22:00–05:00 runs past midnight) |
+| **Weekdays** | Only the ticked days. None ticked = every day. |
 
-Your filters are remembered in this browser. **Reset** goes back to *Today*, all cameras. With *Today* selected, the page refreshes every minute.
+Filters are remembered in your browser. **Reset** goes back to Today. With Today selected, the page refreshes every minute.
 
-### What's on the page
+### On the page
 
-1. **Number tiles**: walk-pasts (with how many had both a face and a body picture), different people, recognised people, strangers.
-2. **Over time**: **New people** (each person once, in the hour they first appeared; the bars add up to *different people*) or **Walk-pasts** (every pass, returns included). A bar per hour for short periods, per day for longer ones; the buttons switch between 15 minutes, hour and day. Hover a bar for its number.
-3. **Busy times**: a grid of weekdays × hours. The darker the square, the more people on an average day at that time. Averaged, so a period with three Mondays doesn't make Monday look three times busier. Striped squares are days not in the period.
-4. **By camera**: the numbers per camera.
-5. **Walk-pasts**: newest first, with the face and body pictures, the camera, the time and how long the person was in view. **Who** says **New person** (counted) or **Came back** (not counted again, with when they were first seen), and which person it was (*Person 5*, or the name if recognised). *Can't tell* means there was no usable picture to match.
-6. **Camera settings** (click to open): untick **Include in counting** to leave a camera out of the totals (for example a camera that mostly films an empty corridor). Its walk-pasts are still recorded, and picking it in the **Cameras** filter still shows them. **What counts** can limit a camera to people whose face was seen, or whose body was seen; *Everyone* is right for most cameras.
+1. **Number tiles**: the numbers above.
+2. **Over time**: **New people** (each person once, when first seen) or **Walk-pasts** (every pass). Use **15 min**, **Hour** or **Day** to change the bar size.
+3. **Busy times**: weekdays × hours. **Darker = busier** on an average day. Striped squares are days outside the period.
+4. **By camera**: numbers per camera.
+5. **Walk-pasts**: each pass with its pictures, camera and time. The **Who** column says:
+   - **New person**: counted.
+   - **Came back**: not counted again.
+   - **Can't tell**: no usable picture.
+6. **Camera settings**:
+   - Untick **Include in counting** to leave a camera out of the totals.
+   - Use **What counts** to count only people whose face (or body) was seen. *Everyone* suits most cameras.
 
-### Good to know
-
-- Times are the box's clock. Hours and weekdays use the box's time zone.
-- The page counts what the cameras detected: someone the camera didn't detect (too far, back turned and body hidden) isn't counted.
-- It doesn't count people **entering or leaving**, or how many are inside right now; the box's records don't say which way someone walked.
-
----
-
-## 14. Pages not available yet
-
-These pages are in the sidebar but show a placeholder for now:
-
-| Page | Planned purpose |
-|---|---|
-| **Settings** | Portal and box settings |
+> The page doesn't count people **entering or leaving**, or how many are inside right now. The box doesn't record which way people walk.
 
 ---
 
-## 15. Step-by-step: common tasks
+## 13. Common tasks
 
-### Daily check (2 minutes)
-
+**Daily check (2 minutes)**
 1. Open the **Dashboard**.
-2. Look at the **Attention queue**. Any offline camera? Tell your administrator or check the camera.
-3. Look at **Strangers** and **Low-liveness matches**. If either is unexpected, open **Recognition** to look closer.
-4. Glance at **Camera readiness**: every camera should be 🟢 **Ready**.
+2. Check the **Attention queue** and **Camera readiness**: every camera should be 🟢.
+3. Check **Strangers** and **Low-liveness matches**. If anything is unexpected, look closer on **Recognition**.
 
-### Register a new employee
+**Register a new employee**
+1. **People** → **+ Add person**.
+2. Enter their name, a clear photo, their employee number as **Code**, and tick **Staff**.
+3. Ask them to walk past a camera, then look for their name in **Live view** or **Recognition**.
 
-1. Take a clear, front-facing photo of their face.
-2. Go to **People** → **+ Add person**.
-3. Enter their **Name**, choose the **photo**, optionally a **Code** (employee number), and tick the **Staff** group.
-4. Click **Add person**.
-5. To check it works, ask them to walk past a camera, then look for their name in **Live view → Latest recognitions** or on the **Recognition** page.
+**Check whether someone came in today**
+1. **Recognition**, with **Matched** selected and today's date → **Search**.
+2. Find their name, then click 👁 for the camera, time and photos.
 
-### Find out whether someone came in today
+**Look into a stranger**
+1. **Recognition** → set **Stranger** → **Search** → 👁 on the record. Note the **Track ID** and camera.
+2. **Captures** → same date and **Device**, then type the **Track ID** to see all pictures of that pass.
+3. If they should be known, add them on **People**.
 
-1. Go to **Recognition**.
-2. Leave **Recognition result** on **Matched** and the dates on today.
-3. Click **Search**, then look for their name. Use **Previous / Next** to page through.
-4. Click **👁 Details** to see the camera, time and photos.
+**Add a camera**
+1. Get the RTSP address, username and password from the installer.
+2. **Devices** → **+ New device** → fill in → **Add device**.
+3. After a minute, click **Refresh**: it should say **Online**. Check it in **Live view**.
 
-### Look into a stranger
+**Set office hours (Mon–Fri, 9 to 5)**
+1. **Time plans** → **Regular plans** → **+ New time plan** → name it *Office hours*.
+2. Click **+** on Monday to Friday, then **Save draft**.
 
-1. Go to **Recognition**, set **Recognition result** to **Stranger**, and click **Search**.
-2. Click **👁 Details** on the record. Note the **Track ID** and camera.
-3. Go to **Captures**, set the same date, choose the **Device**, and type the track number in **Track ID** to see the other pictures of that pass.
-4. If the person should be known, add them on the **People** page.
-
-### Add a new camera
-
-1. Get the camera's **RTSP address**, **username** and **password** from the installer.
-2. Go to **Devices** → **+ New device**, choose **Video** and **RTSP**, and fill in the details.
-3. Click **Add device**.
-4. Click **Refresh** after a minute. The camera should show **Online**. Open **Live view** to check the picture.
-
-### Set office hours (Monday to Friday, 9 to 5)
-
-1. Go to **Time plans** → **Regular plans** → **+ New time plan**.
-2. Rename it *Office hours*.
-3. Click **+** on Monday to Friday. Each gets a 09:00–17:00 window.
-4. Click **Save draft**.
-
-### Get an email when anyone is on camera D3 at night
-
-1. **Alarms** → **Recipients** → **+ Add recipient** for each person to notify (up to 5). Send a test email.
-2. **Rules** → **+ New rule**. Name it *Night watch D3*, severity **Critical**.
-3. Tick **IPCAM-D3**. **Who triggers it**: *Anyone*; also tick **Body capture**.
+**Get an email when anyone is on camera D3 at night**
+1. **Alarms** → **Recipients**: add each person and send a test email.
+2. **Rules** → **+ New rule**: name *Night watch D3*, severity **Critical**.
+3. Tick **IPCAM-D3**. Choose **Anyone** and tick **Body capture**.
 4. **Set times**: all 7 days, **22:00** to **06:00**.
-5. Tick the recipients and click **Create rule**.
+5. Tick the recipients → **Create rule**.
+
+**Handle an alarm email**
+1. Click the link in the email.
+2. Check the snapshot, type your name and a note.
+3. Click **Acknowledge**, then **Resolve** when dealt with, or **False alarm** if nothing was wrong.
+
+**Find the busiest hours at the entrance last week**
+1. **People counting** → **Cameras**: tick only the entrance camera.
+2. **Period**: **Last 7 days**.
+3. Look at **Busy times**: the darkest squares are the busiest hours.
 
 ---
 
-## 16. Messages and what to do
+## 14. Messages and what to do
 
-| Message | What it means | What to do |
-|---|---|---|
-| *Incorrect username or password.* | Wrong sign-in password | Use the password `admin` |
-| *Missing or wrong API key* | The portal isn't allowed to talk to its server | Ask your administrator to check the API key settings |
-| *B4H box unreachable* | The portal's server can't reach the box | Check the box is powered on and connected; wait if it's restarting |
-| *The box took too long to answer* | The search was too big, or the box is busy | Shorten the date range and try again |
-| *Box error on …* | The box refused the request | Try again. If it repeats, report the full message to your administrator. |
-| *Login to the box is paused…* | The portal's box password is wrong | Your administrator must fix the password and restart the portal's server |
-| *A device named '…' already exists* | Camera names must be unique | Choose another name |
-| *photo is too large (max 5 MB)* | The face photo file is too big | Use a smaller photo |
-| *photo must be an image* | The chosen file isn't a picture | Choose a JPEG or PNG file |
-| *Person details were saved, but changing the groups failed* | The name/photo were saved but not the groups | Edit the person again and re-select the groups |
-| *Stream unavailable…* / *no video* | Live video couldn't start | Click **Retry**; if it keeps failing, check the camera or tell your administrator |
-| *Too many live videos open* | Too many videos are playing at once | Close tiles or other Live view tabs |
-| *…isn't connected yet* (button disabled) | That feature isn't finished in the portal | Use the box's own web interface for now |
-| *No records for these filters.* / *No captures match these filters.* | Nothing matched | Widen the date range or clear filters |
-| *Box clock unavailable* / *Portal clock* | The box's clock couldn't be read | Times still work. Tell your administrator if it persists. |
-| *Page not found* | The address doesn't exist | Click **Back to Dashboard** |
-| *Alarms need the portal database* | Alarms aren't set up on the server | Ask your administrator |
-| *Email isn't set up…* | Alarms are recorded but not emailed | Ask your administrator to set up email |
-| *Someone else changed this rule while you were editing it* | Two people edited the same rule | Close the form, then edit again |
-| *A rule named '…' already exists* / *A recipient with the email … already exists* | Names and emails must be unique | Use another name, or edit the existing one |
+| Message | What to do |
+|---|---|
+| *Incorrect username or password* | Use the password `admin` |
+| *Missing or wrong API key* | Ask your administrator to check the API key settings |
+| *B4H box unreachable* | Check the box is on and connected; wait if it's restarting |
+| *The box took too long to answer* | Shorten the date range and try again |
+| *Box error on …* | Try again. If it repeats, send the message to your administrator. |
+| *Login to the box is paused…* | The portal's box password is wrong. Your administrator must fix it. |
+| *A device named '…' already exists* | Choose another camera name |
+| *photo is too large (max 5 MB)* / *photo must be an image* | Use a smaller JPEG or PNG |
+| *…changing the groups failed* | Edit the person again and re-select the groups |
+| *Stream unavailable* / *no video* | Click **Retry**. If it keeps failing, check the camera or tell your administrator. |
+| *Too many live videos open* | Close some tiles or Live view tabs |
+| *…isn't connected yet* | That feature isn't in the portal yet; use the box's own web page |
+| *No records for these filters* / *No captures match these filters* | Widen the date range or clear filters |
+| *Box clock unavailable* | Times still work. Tell your administrator if it continues. |
+| *Dashboard numbers may be behind* | Check the box is on. The numbers catch up by themselves. |
+| *Alarms need the portal database* / *People counting needs the portal database* | Ask your administrator |
+| *Email isn't set up* | Ask your administrator to set up email |
+| *Someone else changed this rule…* | Close the form and edit again |
+| *A rule named '…' already exists* / *A recipient with the email … already exists* | Use another name, or edit the existing one |
+| *…still being processed* (People counting) | Wait a few seconds |
+| *This period has too many walk-pasts to compare…* | Pick a shorter period |
+| *Page not found* | Click **Back to Dashboard** |
 
 ---
 
-## 17. Frequently asked questions
+## 15. Questions
 
-**Why does someone I deleted from People still show up in old records?**
-The box keeps old records after a person is deleted. The portal hides them on the Recognition page; you might still see them on the Captures page, which shows every capture.
+**Why are times on screen off by an hour or more?**
+Your computer's time zone differs from the box's. Change your computer's time zone to match.
 
-**Why are the times on screen an hour (or more) off?**
-Your computer's time zone differs from the box's. Set your computer to the box's time zone.
+**A camera is Online but Live view is black. Why?**
+Click **Reconnect**. If that fails, the camera's address or password may be wrong (check **Devices**), or video conversion isn't set up (tell your administrator).
 
-**Why does the Dashboard say "Box clock unavailable"?**
-Some box models don't report their clock. The figures are still correct; the portal just can't show the box's own time.
+**Why doesn't the camera filter show all records for that camera?**
+On Recognition and Captures it only filters the loaded page. Use a shorter date range or a bigger page size.
 
-**A camera is "Online" but the Live view is black. Why?**
-The box can reach the camera, but its video couldn't be converted for the browser. Click **Reconnect**. If that fails, the camera's stream address or password may be wrong (check **Devices**), or video conversion isn't set up on the server (tell your administrator).
-
-**Why doesn't the camera filter on Recognition or Captures show all records for that camera?**
-These filters only work on the page that's already loaded. Use a narrower date range, or (on Captures) a larger page size, and page through.
+**Someone I deleted still appears on Captures. Why?**
+The box keeps old records. Recognition hides them; Captures shows everything.
 
 **Can I undo a delete?**
-No. Deleting records, people, cameras or time plans changes the box permanently.
+No. Deleting records, people, cameras or plans changes the box permanently.
+
+**I didn't get an alarm email. Why?**
+Check that:
+1. The rule is **On** and the camera is ticked.
+2. The time was inside the rule's hours (box time).
+3. You're a recipient and *Receives alarm emails* is ticked.
+4. The rule wasn't in its quiet period.
+5. The email isn't in your spam folder.
+
+**Why did one email cover several people?**
+During a rule's quiet period, new detections join the open alarm instead of sending more emails.
+
+**Why does People counting say "≈" and show a range?**
+Different people are worked out by comparing faces and clothing, which isn't perfect. See [Why "different people" is an estimate](#why-different-people-is-an-estimate).
 
 **Is my data safe?**
-Camera passwords are never shown in the portal. The sign-in is currently a demonstration, so only use the portal on your trusted internal network.
+Camera passwords are never shown. The sign-in is a demo, so only use the portal on your trusted internal network.
 
 ---
 
-## 18. Glossary
+## 16. Glossary
 
 | Term | Meaning |
 |---|---|
-| **Box** | The B4H analytics device that watches the cameras |
-| **Face library** | The list of known people the box can recognise |
+| **Box** | The B4H device that analyses the cameras |
+| **Face library** | The box's list of known people |
 | **Recognition / match** | A face that matched someone in the face library |
-| **Stranger** | A face that matched nobody in the face library |
-| **Capture** | A face or body picture the box saved, recognised or not |
+| **Stranger** | A face that matched nobody in the library |
+| **Capture** | A face or body picture the box saved |
 | **Similarity** | How closely a face matches a library photo (0–100) |
-| **Liveness / living fraction** | How likely a face is a real, live person (0–100) |
+| **Liveness** | How likely a face is a real person (0–100) |
 | **Track / Track ID** | One person's continuous path past one camera, and its number |
-| **Panoramic / Scene** | The whole camera picture the face or body was taken from |
-| **SD / HD** | Lower-quality (lighter) / full-quality video |
 | **Analysis task** | The job the box runs on a camera, e.g. face recognition |
+| **RTSP address** | A camera's video address, starting with `rtsp://` |
 | **Time plan** | A weekly schedule of when the box's rules are active |
-| **RTSP address** | The camera's video address, starting with `rtsp://` |
+| **Alarm** | A record that a rule matched someone, with a snapshot |
+| **Rule** | Which cameras, who and when should raise an alarm |
+| **Severity** | How serious an alarm is: Info, Warning or Critical |
+| **Quiet period** | How long a rule waits before emailing again for the same camera |
+| **Walk-past** | One person passing one camera once |
+| **Different people** | How many separate people the walk-pasts were (an estimate) |

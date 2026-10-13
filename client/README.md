@@ -57,11 +57,11 @@ How each page is used is in the [User Guide](../docs/user-guide.md).
 | `/login` | Login | Demo login |
 | `/` | Dashboard | Connected (today's security activity, camera health, attention queue, and 45-second refresh) |
 | `/live` | Live view | Connected (MJPEG streams, sub-stream in the grid, main stream in HD) |
-| `/alarms`, `/alarms/:id` | Alarms | Placeholder |
+| `/alarms`, `/alarms/:id` | Alarms | Connected (alarms list and details, rules, email recipients; needs the backend database) |
 | `/recognition` | Recognition records | Connected (list, filter, delete) |
 | `/recognition/:id` | Recognition detail | Placeholder |
 | `/captures` | Face and body captures | Connected |
-| `/counting` | People counting | Placeholder |
+| `/counting` | People counting | Connected (walk-pasts, different people, charts, busy times, camera settings; needs the backend database) |
 | `/people` | Face library | Connected (list, add, edit, delete) |
 | `/devices` | Cameras | Connected (list, status, add, edit, delete; RTSP video only) |
 | `/timeplans` | Time plans | Connected (regular and festival plans: list, add, edit, delete) |
@@ -82,16 +82,17 @@ client/
 │  ├─ components/
 │  │  ├─ layout/                 # AppShell, Sidebar/, Navbar/
 │  │  ├─ common/                 # PageHeader, Placeholder
-│  │  ├─ dashboard/ devices/ people/ recognition/ captures/ timeplans/
+│  │  ├─ dashboard/ devices/ people/ recognition/ captures/ timeplans/ alarms/ counting/
 │  │  └─ **/*.test.tsx           # component tests sit next to the component
 │  ├─ lib/                       # API clients: the ONLY place that calls fetch('/api/...')
 │  │  ├─ dashboard.ts devices.ts personnel.ts recognition.ts captures.ts preview.ts timeplans.ts
+│  │  ├─ alarms.ts counting.ts
 │  │  └─ paths.ts                # every page URL in one place
 │  ├─ mocks/handlers.ts          # MSW fake backend responses for tests
 │  ├─ test/setup.ts              # Vitest setup: jest-dom matchers + MSW server
 │  ├─ middleware.ts              # adds X-API-Key to /api requests
 │  ├─ config/navigation.ts       # sidebar sections and links
-│  └─ hooks/useLocalStorage.ts
+│  └─ hooks/                     # useLocalStorage, useOpenAlarmCount (sidebar alarm badge)
 ├─ e2e/                          # Playwright end-to-end tests
 ├─ vitest.config.mts
 └─ playwright.config.ts

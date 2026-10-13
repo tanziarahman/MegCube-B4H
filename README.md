@@ -11,6 +11,8 @@ Browser ──▶ Next.js frontend ──▶ FastAPI backend ──▶ B4H box
 
 | Document | For |
 |---|---|
+| **[Project overview](docs/project-overview.md)** | What the project is and how data flows through it, in plain language |
+| **[System design](docs/system-design.md)** | Layers, components, data design, performance, reliability and security, in plain language |
 | **[User Guide](docs/user-guide.md)** | How to use every page: step-by-step tasks, messages, FAQ |
 | **[Architecture](docs/architecture.md)** | How the parts fit together, security model, known issues |
 | **[Backend API reference](docs/backend-api.md)** | Every `/api/*` route: parameters, responses, errors, box calls behind it |

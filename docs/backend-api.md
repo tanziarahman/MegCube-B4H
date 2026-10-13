@@ -227,11 +227,16 @@ Scores the box sends as fractions (0–1) are converted to 0–100.
 | `422` | `date` isn't `YYYY-MM-DD`. Nothing is sent to the box. |
 | `502` / `503` / `504` | See [Errors](#13-errors) |
 
-**Box calls:** health always uses `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info`, cached for 15 seconds. A database-served activity date makes no `alarm_history` calls; it reads `count_buckets`, `daily_stats`, and `events` from PostgreSQL. Uncovered dates use the original paged `alarm_history` computation.
+**Where the numbers come from**
 
-> **Performance:** Redis hits avoid all loaders. A database cache miss makes five health box calls plus small sequential PostgreSQL queries; the 45-second frontend refresh does not bypass cache. Set `DASHBOARD_SOURCE=box` or empty `REDIS_URL` as a rollback.
+| Part | Source | Cached in Redis |
+|---|---|---|
+| Camera health and clock | Box: `device_config`, `device_state`, `task_list`, `get_system_time`, `get_time_info` | 15 s |
+| Activity (totals, trends, top people) | PostgreSQL (`count_buckets`, `daily_stats`, `events`) for days the database covers; otherwise the box's `alarm_history`, paged | 15 s for today, 1 h for past days |
 
-Database mode intentionally differs from box mode: captures exclude structure-only records, analysis is not sampled, top people come from matched events only, and deleted box recognition records remain in portal history.
+- Redis is optional. If `REDIS_URL` is empty or Redis is down, everything is read fresh.
+- `DASHBOARD_SOURCE=box` forces the old box-only path.
+- Database and box mode differ slightly: the database never samples, counts top people from matched events only, and keeps records later deleted on the box.
 
 ---
 
@@ -1007,34 +1012,39 @@ All fields optional. Moving away from `open` records `acknowledged_at` and `ackn
 
 ## 16. People counting
 
-How many people walked past each camera, and how many different people that was. Built from the box records the alarm worker already stores (no extra box calls): each record is put into a **sighting**, one person passing one camera once, as it arrives. The box never puts a face and a body in one record, but numbers them from one counter, so face track `F` and body track `F − 1` on the same camera (first records at most `COUNT_PAIR_MAX_SECONDS` apart) are merged into one sighting.
+How many people walked past each camera, and how many different people that was. Needs the **database**: without `DATABASE_URL` every route answers `503`. It makes no extra box calls; it uses the records the alarm worker already saves.
 
-Like Alarms, this needs the **database**: without `DATABASE_URL` every route answers `503`. Sightings for records saved before this feature existed are built once with `uv run python -m counting.backfill` (see the [backend README](../fastapi-app/README.md#database-and-alarms)).
+**How the numbers are made**
 
-### 16.1 Terms and shared parameters
+1. **Walk-pasts** (`counting/builder.py`): each new record is put into a *sighting*, meaning one person passing one camera once. The box saves faces and bodies as separate records but numbers them from one counter, so face track `F` and body track `F − 1` on the same camera are merged. They must start within `COUNT_PAIR_MAX_SECONDS` (120) of each other.
+2. **Fingerprints** (`faces/embedder.py`, `faces/worker.py`): after each poll, the backend downloads each new walk-past's face and body pictures from the box and turns each into a fingerprint. It uses three pretrained OpenCV Zoo models, run through OpenCV:
+   - **YuNet** finds the face.
+   - **SFace** makes the face fingerprint.
+   - **YouTu ReID** makes the body fingerprint, which mostly reflects clothing.
 
-| Term | Meaning | Accuracy |
-|---|---|---|
-| `walk_pasts` | Sightings: one person passing one camera once | Very good |
-| `visits` | Sightings of the same **identified** person on the same camera within `COUNT_VISIT_GAP_SECONDS` (120) count once | Equals walk-pasts until people are identified |
-| `unique_people` | `COUNT(DISTINCT person_key)`: different people in the cameras and period | Exact for recognised people; an **upper bound** for everyone else |
-| `known_people` | Different face-library people | Exact |
-| `stranger_walk_pasts` | Walk-pasts the box compared and found no match for. Strangers aren't grouped, so these aren't different people | Exact as a walk-past count |
+   Unclear or tiny faces get no fingerprint.
+3. **Different people** (`faces/grouping.py`): computed on each request for the chosen cameras and period, in plain NumPy:
+   - Pairs of walk-pasts are compared by cosine similarity: 60% body and 40% face, or whichever one both walk-pasts have.
+   - Bodies are only compared within the same day, because clothes change.
+   - Two walk-pasts on the same camera at the same time are never the same person.
+   - Walk-pasts are grouped by average similarity until no pair of groups reaches `PEOPLE_MATCH_THRESHOLD` (0.35).
+   - People the box recognised are counted by their face-library id instead.
+   - `low` / `high` repeat the grouping with the threshold ± `PEOPLE_MATCH_RANGE` (0.05).
 
-Today the box sends no face-recognition results, so nobody can be identified and `unique_people` = `visits` = `walk_pasts`. `identity_available` (summary) says whether that has changed.
+Records saved before this feature existed: `uv run python -m counting.backfill`. Models: `uv run python -m faces.download`. See the [backend README](../fastapi-app/README.md#database-and-alarms).
 
-**Different people by face and clothing (`face_estimate`).** After each poll the backend fingerprints the face picture (OpenCV YuNet + SFace) and the whole-body picture (YouTu ReID: mostly clothing) of every new walk-past; see the [backend README](../fastapi-app/README.md#database-and-alarms). For a request, the walk-pasts in the chosen cameras and period are grouped: recognised people by their library id, everyone else by similarity (60 % body, 40 % face; bodies only within the same day, since clothes change; two walk-pasts on one camera at the same moment are never one person). The answer is a range: `people` at `PEOPLE_MATCH_THRESHOLD` (0.35), `low` at 0.05 looser, `high` at 0.05 stricter. Walk-pasts with no usable face or body picture aren't in it. Across several days only faces can link a person, so multi-day counts run higher than the truth.
+### 16.1 Shared parameters
 
-Every route except the camera settings takes:
+All routes except camera settings take:
 
 | Param | Default | Rules |
 |---|---|---|
 | `camera_id` | every camera with `count_enabled` | Repeatable. Portal camera ids (16.6). Unknown or removed → `422` |
-| `start`, `end` | today 00:00:00 → now | `YYYY-MM-DD HH:mm:ss` in the box's time zone; `start` must be before `end`; at most 366 days |
-| `hours` | all day | `9-17` (inclusive local hours 0–23) or `22-5` (past midnight) |
-| `days` | every day | ISO weekdays, `1,2,3,4,5` = Monday–Friday |
+| `start`, `end` | today 00:00:00 → now | `YYYY-MM-DD HH:mm:ss`, box time zone; at most 366 days |
+| `hours` | all day | `9-17`, or `22-5` for past midnight |
+| `days` | every day | ISO weekdays, e.g. `1,2,3,4,5` = Mon–Fri |
 
-A sighting belongs to the time, hour and weekday of its **first** record (box clock). Each camera's `count_basis` decides which of its sightings count: `merged` all, `face` only those with a face track, `body` only those with a body track.
+A walk-past belongs to the time of its **first** record. Each camera's `count_basis` decides which walk-pasts count: `merged` (all), `face` (has a face track) or `body` (has a body track).
 
 ### 16.2 `GET /api/counting/summary`
 
@@ -1045,31 +1055,40 @@ A sighting belongs to the time, hour and weekday of its **first** record (box cl
               "not_compared_walk_pasts": 120, "paired": 104, "face_only": 9, "body_only": 7,
               "face_estimate": { "people": 7, "low": 6, "high": 10, "fingerprinted": 69, "unusable": 1,
                                  "pending": 0, "too_many": false } },
-  "by_camera": [ { "camera_id": 2, "name": "IPCAM-D3", "count_basis": "merged", "walk_pasts": 120, "visits": 118,
-                   "face_estimate": { "…": "…" }, "…": "…" } ],
+  "by_camera": [ { "camera_id": 2, "name": "IPCAM-D3", "count_basis": "merged", "walk_pasts": 120, "…": "…" } ],
   "identity_available": false,
   "face_matching": { "available": true, "reason": null },
   "last_sighting_at": "2026-10-04T09:12:03+00:00"
 }
 ```
 
-`paired` have both a face and a body track, `face_only` no body, `body_only` no face. `face_estimate`: `fingerprinted` walk-pasts are in the estimate, `unusable` aren't (nothing to compare), `pending` haven't been processed yet; `too_many: true` (more than `PEOPLE_MAX_GROUPING`, 2000, walk-pasts) leaves `people`/`low`/`high` `null`: pick a shorter period. `face_matching.available` is false (with a `reason`) when the models aren't installed or `FACE_MATCHING=0`. `identity_available`: any recognised or stranger record on these cameras in the last 7 days. `last_sighting_at`: latest sighting on these cameras, whatever the period.
+| Field | Meaning |
+|---|---|
+| `walk_pasts` | One person passing one camera once |
+| `paired` / `face_only` / `body_only` | Walk-pasts with both a face and a body track / only a face / only a body |
+| `visits` | Same recognised person on the same camera within `COUNT_VISIT_GAP_SECONDS` (120) counts once |
+| `unique_people` | Distinct people by the box's identity only. Equals `visits` while the box sends no recognition results |
+| `known_people` | Different face-library people (exact) |
+| `stranger_walk_pasts` | Walk-pasts the box found no library match for. Counts passes, not people |
+| `face_estimate.people` / `low` / `high` | Different people from fingerprints (what the page shows) |
+| `face_estimate.fingerprinted` / `unusable` / `pending` | Walk-pasts in the estimate / with nothing to compare / not processed yet |
+| `face_estimate.too_many` | `true` above `PEOPLE_MAX_GROUPING` (2000) walk-pasts; `people`/`low`/`high` are then `null` |
+| `identity_available` | Any recognised or stranger record on these cameras in the last 7 days |
+| `face_matching.available` | `false` (with `reason`) if the models aren't installed or `FACE_MATCHING=0` |
 
 ### 16.3 `GET /api/counting/series`
 
-`granularity` = `15m` (range ≤ 7 days), `hour` (default, ≤ 62 days) or `day` (≤ 366 days); a longer range → `422` naming the granularity to use. Points are zero-filled and skip slots outside `hours` / `days`. `face` / `body` are the walk-pasts with a face / body track.
+Walk-pasts over time. `granularity`: `15m` (range ≤ 7 days), `hour` (default, ≤ 62 days) or `day` (≤ 366 days). Slots are zero-filled.
 
 ```json
 { "granularity": "hour", "points": [ { "start": "2026-10-04T09:00:00+06:00", "walk_pasts": 4, "face": 3, "body": 4, "new_people": 2 } ] }
 ```
 
-`new_people`: people seen for the **first time in the period**, counted in the slot of their first walk-past; someone who comes back later in the period isn't counted again. They add up to `face_estimate.people` (summary). `null` when the period has too many fingerprints to group.
-
-Read from 15-minute totals: a bucket that starts before `start` but overlaps it is included.
+`new_people`: people seen for the first time in the period, in the slot of their first walk-past. They add up to `face_estimate.people`. It is `null` when there are too many walk-pasts to group.
 
 ### 16.4 `GET /api/counting/heatmap`
 
-Busy times: walk-pasts per weekday × local hour, **averaged per day** (divided by how many of that weekday the range covers), so a range with three Mondays doesn't look three times busier. Only cells with walk-pasts are listed.
+Walk-pasts per weekday × hour, averaged per day (so three Mondays don't look three times busier). Only non-empty cells are listed.
 
 ```json
 { "cells": [ { "iso_dow": 1, "hour": 9, "walk_pasts": 7, "avg_walk_pasts": 3.5 } ],
@@ -1078,7 +1097,7 @@ Busy times: walk-pasts per weekday × local hour, **averaged per day** (divided 
 
 ### 16.5 `GET /api/counting/sightings`
 
-The walk-pasts behind the numbers, newest first. `page` / `size` (default `1` / `20`, `size` ≤ 100).
+The walk-pasts behind the numbers, newest first. `page` / `size` (default `1` / `20`, max `100`).
 
 ```json
 { "total": 120, "page": 1, "size": 20, "items": [ {
@@ -1089,13 +1108,20 @@ The walk-pasts behind the numbers, newest first. `page` / `size` (default `1` / 
     "person_no": 5, "new_person": false, "person_first_seen_at": "2026-10-04T03:44:52+00:00" } ] }
 ```
 
-Each item also has `person_no` (the n-th different person in the period, in order of first appearance), `new_person` (`true` on that person's first walk-past in the period, `false` when they came back) and `person_first_seen_at`; all three are `null` when the walk-past had no usable face or body picture. `person_source`: `recognized` / `stranger` / `unidentified`. `recognition_result`: `matched`, `stranger` or `null` (not compared). Images go through [`GET /api/image`](#121-get-apiimage).
+| Field | Meaning |
+|---|---|
+| `person_no` | Which different person this was (1st, 2nd, …) in the period |
+| `new_person` | `true` on the person's first walk-past in the period, `false` when they came back |
+| `person_source` | `recognized`, `stranger` or `unidentified` |
+| `recognition_result` | `matched`, `stranger`, or `null` (not compared) |
+
+`person_no`, `new_person` and `person_first_seen_at` are `null` when the walk-past had no usable picture. Show images through [`GET /api/image`](#121-get-apiimage).
 
 ### 16.6 Camera settings
 
 | Method | Path | Body → response |
 |---|---|---|
-| GET | `/api/counting/cameras` | `[ { "id", "device_id", "name", "deleted", "count_enabled", "count_basis" } ]` (the alarm worker keeps the list in sync with the box) |
-| PATCH | `/api/counting/cameras/{id}` | `{ "count_enabled"?: false, "count_basis"?: "merged" \| "face" \| "body" }` → the camera. `404` if unknown. Written to the audit log |
+| GET | `/api/counting/cameras` | `[ { "id", "device_id", "name", "deleted", "count_enabled", "count_basis" } ]` |
+| PATCH | `/api/counting/cameras/{id}` | `{ "count_enabled"?: bool, "count_basis"?: "merged" \| "face" \| "body" }` → the camera. `404` if unknown |
 
-`count_enabled: false` leaves a camera out of the default camera list; its sightings are still built, and asking for it by `camera_id` still shows them.
+`count_enabled: false` leaves a camera out of the default list. Its walk-pasts are still built, and asking for it by `camera_id` still returns them.
